@@ -1,72 +1,70 @@
 flowchart TB
-    subgraph External["External"]
-        VEND["Vendor sources\nOpenAPI, PyPI, npm, GH releases"]
-        CONSUMER_INFRA["Org's own infra\nself-hosted or managed"]
-    end
+  subgraph Vendors["Vendor sources"]
+    V1["OpenAPI / GraphQL specs"]
+    V2["npm / PyPI registries"]
+    V3["GitHub releases"]
+  end
 
-    subgraph OSSCore["Open source core (self-hostable)"]
-        direction TB
+  subgraph CI["CI - GitHub Actions"]
+    ADAPT["Community adapter sandbox\nisolated, no network egress beyond declared source"]
+    TEST["Test suite + schema checks"]
+  end
 
-        subgraph IngestionInfra["Ingestion workers"]
-            SCHED["Scheduler / cron\npolls source adapters"]
-            WORKER["Adapter worker pool\nsandboxed per-vendor"]
-        end
+  subgraph IngestSvc["Ingestion service - container"]
+    ING["Structured source adapters"]
+  end
 
-        subgraph ProcessingInfra["Processing service"]
-            DIFF["Diff + normalize service"]
-            SCORE["Confidence scorer"]
-        end
+  subgraph ProcSvc["Processing service - container"]
+    HASH["Content hash filter"]
+    DIFF["Symbolic diff engine"]
+    SCORE["Confidence scoring"]
+  end
 
-        subgraph RegistryInfra["Registry core"]
-            PG[("Postgres\nappend-only, single writer")]
-            SIGN["Signing service\nholds private key"]
-            REPLICA[("Read replicas\npublic, verifiable")]
-        end
+  subgraph RegistryCore["Registry core - trust root"]
+    WRITER["Single-writer service\nholds signing key"]
+    DB[("Postgres\nappend-only, versioned")]
+    REPLICA[("Read replicas\npublic availability")]
+  end
 
-        subgraph InterfaceInfra["Interface services"]
-            MCP["MCP server\nstateless, horizontally scalable"]
-            WEBHOOK["Webhook dispatcher\nsigned, pointer-only"]
-        end
+  subgraph InterfaceSvc["Interface layer"]
+    MCP["MCP server\npull: get_entry, list_changes, verify_entry"]
+    HOOK["Webhook service\npush: signed, pointer-only events"]
+  end
 
-        subgraph CIInfra["CI / adapter sandbox"]
-            SANDBOX["Isolated adapter test env\nno network beyond declared vendor"]
-        end
-    end
+  subgraph OrgInfra["Consumer org infra - self-hosted"]
+    SDK["verification-sdk\npublic key verify"]
+    AGENT["Agent orchestration\nClaude Code / Devin / internal"]
+    SCAN["Call-site index\nAST scan of org repo"]
+    FIX["Fix generator\ncodemod / bounded LLM"]
+    PR["PR opened\nlinked to signed entry"]
+  end
 
-    subgraph ManagedLayer["Managed / hosted layer (monetized, optional)"]
-        MANAGED_HOST["Managed hosting\nSLA, uptime, scaling"]
-        DASH["Org dashboards"]
-        COVERAGE["Vendor coverage service\nkeeps adapters current"]
-    end
+  subgraph Ops["Deployment infra"]
+    SECRETS["Secrets manager\nsigning key, DB creds"]
+    MON["Monitoring / logging"]
+  end
 
-    subgraph VerifySDK["Verification SDK (published independently)"]
-        VSDK["verification-sdk\npublic key + hash verify"]
-    end
+  V1 --> ING
+  V2 --> ING
+  V3 --> ING
+  ADAPT --> ING
+  TEST --> ADAPT
 
-    VEND -->|polled by| SCHED
-    SCHED --> WORKER
-    WORKER --> DIFF
-    DIFF --> SCORE
-    SCORE -->|signed write| SIGN
-    SIGN -->|append only| PG
-    PG --> REPLICA
-    PG --> MCP
-    PG --> WEBHOOK
+  ING --> HASH --> DIFF --> SCORE --> WRITER
+  WRITER --> DB
+  DB --> REPLICA
+  DB --> MCP
+  DB --> HOOK
 
-    WEBHOOK -.->|signed pointer event| CONSUMER_INFRA
-    MCP -->|pull verified data| CONSUMER_INFRA
-    REPLICA -->|read-only fallback| CONSUMER_INFRA
+  SECRETS -.-> WRITER
+  SECRETS -.-> HOOK
+  MON -.-> IngestSvc
+  MON -.-> ProcSvc
+  MON -.-> RegistryCore
 
-    CONSUMER_INFRA -->|verifies via| VSDK
-    VSDK -.->|public key| SIGN
-
-    SANDBOX -.->|gates merge into| WORKER
-
-    ManagedLayer -->|optionally wraps| OSSCore
-    CONSUMER_INFRA -->|opens PR against| VEND
-
-    style PG fill:#0F6E56,color:#fff
-    style SIGN fill:#0F6E56,color:#fff
-    style REPLICA fill:#5DCAA5,color:#042C53
-    style VSDK fill:#3C3489,color:#fff
-    style ManagedLayer fill:#888780,color:#fff
+  MCP --> AGENT
+  HOOK --> AGENT
+  AGENT --> SDK
+  SDK -.verify.-> REPLICA
+  AGENT --> SCAN --> AGENT
+  AGENT --> FIX --> PR
