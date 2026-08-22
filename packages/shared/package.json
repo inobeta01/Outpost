@@ -1,0 +1,38 @@
+{
+  "name": "@outpost/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed provider/source configs (JSON Schema + TypeScript types). Single source of truth for what ingestion can fetch and from where.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./schemas/*.json": "./dist/schemas/*.json"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-schemas.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'lint not configured yet' && exit 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

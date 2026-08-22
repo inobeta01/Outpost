@@ -3,6 +3,14 @@ node_modules/
 .pnp/
 .pnp.js
 
+# pnpm
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
 # Turbo cache
 .turbo/
 
@@ -22,3 +30,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+
+# Coverage
+coverage/
+*.lcov
+
+# OS
+Thumbs.db

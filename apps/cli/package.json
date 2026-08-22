@@ -1,0 +1,25 @@
+{
+  "name": "@outpost/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Operator CLI — runs ingest locally, validates provider configs, inspects registry entries.",
+  "type": "module",
+  "bin": {
+    "outpost": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'lint not configured yet' && exit 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@outpost/shared": "workspace:*",
+    "@outpost/ingestion": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

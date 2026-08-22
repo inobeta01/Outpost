@@ -1,0 +1,23 @@
+{
+  "name": "outpost",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Trust-rooted registry of external API/SDK/vendor changes, with signed change events for downstream agents.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "build": "pnpm -r --filter='./packages/*' build",
+    "typecheck": "pnpm -r --filter='./packages/*' typecheck",
+    "test": "pnpm -r --filter='./packages/*' test",
+    "lint": "pnpm -r --filter='./packages/*' lint",
+    "clean": "pnpm -r --filter='./packages/*' clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

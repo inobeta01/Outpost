@@ -1,0 +1,29 @@
+{
+  "name": "@outpost/ingestion",
+  "version": "0.0.0",
+  "private": true,
+  "description": "P1 host loop. Walks provider configs, queues sources, spawns sandbox, hands signed artifacts to P2.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'lint not configured yet' && exit 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@outpost/shared": "workspace:*",
+    "@outpost/sandbox-runner": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

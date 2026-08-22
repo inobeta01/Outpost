@@ -1,0 +1,17 @@
+{
+  "name": "@outpost/consumer-reference",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference consumer — shows how to wire MCP registration + verification SDK into Claude Code / Devin / internal agents. Anchors Architecture Review gap #7.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "echo 'reference consumer — scripts wired up after SDK lands' && exit 0"
+  },
+  "dependencies": {
+    "@outpost/verification-sdk": "workspace:*",
+    "@outpost/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
