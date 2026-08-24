@@ -25,6 +25,25 @@ import type { DerivedAnchor } from "./anchor/derive-anchor.js";
 import type { FetchLike, ReadEnvLike } from "../structured/types.js";
 
 /**
+ * Minimal Firecrawl-style scrape contract. The real Firecrawl
+ * SDK returns `{ markdown, html, metadata, json }` — we only
+ * need the markdown (or, for `rss`, the raw XML which is fetched
+ * via `fetch`, not the scrape client). Strategies depend on this
+ * interface, not on the Firecrawl SDK, so tests can stub it
+ * with a recorded markdown blob.
+ *
+ * Per ADR §2: only `scrape` is allowed in the automated pipeline
+ * (crawl/map are out of scope). v1 only calls `scrape`.
+ */
+export interface ScrapeClient {
+  scrape(url: string, init?: { onlyMain?: boolean }): Promise<{
+    readonly markdown: string;
+    readonly html: string;
+    readonly metadata: { readonly title: string | null; readonly sourceURL: string };
+  }>;
+}
+
+/**
  * An item resolved by the strategy's `resolve_items` step. The
  * strategy's responsibility: produce a list of these given the
  * spec and the previous poll's state.
@@ -58,6 +77,11 @@ export interface ResolveItemsInput {
   readonly source: UnstructuredSource;
   /** Anchor values from the previous successful poll (for early-stop). */
   readonly lastSeenAnchors: ReadonlyArray<DerivedAnchor>;
+  readonly deps: {
+    readonly fetch: FetchLike;
+    readonly readEnv: ReadEnvLike;
+    readonly scrape: ScrapeClient;
+  };
 }
 
 /** What `fetch_item` returns — the payload `derive_anchor` reads. */
@@ -82,7 +106,11 @@ export interface FetchItemOutput {
 export interface FetchItemInput {
   readonly item: ResolvedItem;
   readonly source: UnstructuredSource;
-  readonly deps: { readonly fetch: FetchLike; readonly readEnv: ReadEnvLike };
+  readonly deps: {
+    readonly fetch: FetchLike;
+    readonly readEnv: ReadEnvLike;
+    readonly scrape: ScrapeClient;
+  };
 }
 
 /**

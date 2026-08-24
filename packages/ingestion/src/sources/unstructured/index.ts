@@ -53,9 +53,13 @@ export {
   type StrategyExecutionErrorCode,
 } from "./strategy-registry.js";
 
-// Side-effect imports — Slice 4 will register the 5 strategies here.
-// import "./extractors/single-page.strategy.js";
-// import "./extractors/index-then-detail.strategy.js";
-// import "./extractors/paginated-index.strategy.js";
-// import "./extractors/raw-file.strategy.js";
-// import "./extractors/rss.strategy.js";
+// Side-effect imports — register the 5 extraction strategies
+// (single_page, index_then_detail, paginated_index, raw_file, rss)
+// with the strategy registry. Importing this barrel is the only
+// place this registration happens; tests and the host loop
+// should always go through the barrel.
+import "./extractors/single-page.strategy.js";
+import "./extractors/index-then-detail.strategy.js";
+import "./extractors/paginated-index.strategy.js";
+import "./extractors/raw-file.strategy.js";
+import "./extractors/rss.strategy.js";
