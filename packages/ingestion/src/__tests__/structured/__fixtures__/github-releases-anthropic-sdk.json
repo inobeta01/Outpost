@@ -1,0 +1,20 @@
+[
+  {
+    "id": 12345,
+    "tag_name": "v0.27.0",
+    "name": "v0.27.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-08-20T15:30:00Z",
+    "html_url": "https://github.com/anthropics/anthropic-sdk-typescript/releases/tag/v0.27.0"
+  },
+  {
+    "id": 12000,
+    "tag_name": "v0.26.0",
+    "name": "v0.26.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-08-10T12:00:00Z",
+    "html_url": "https://github.com/anthropics/anthropic-sdk-typescript/releases/tag/v0.26.0"
+  }
+]
