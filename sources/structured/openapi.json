@@ -2,6 +2,7 @@
   "id": "github.com/stripe/stripe-node",
   "kind": "structured",
   "owner": "@vendor-bot",
+  "source_type": "openapi",
   "fetch": {
     "auth": "github_token_env",
     "rate_limit": "5000/h"
@@ -15,6 +16,9 @@
         "repo": "stripe-node"
       }
     }
+  },
+  "security": {
+    "allowed_domains": ["raw.githubusercontent.com", "github.com"]
   },
   "firecrawl": false
 }

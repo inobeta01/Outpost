@@ -2,6 +2,7 @@
   "id": "npm/openai",
   "kind": "structured",
   "owner": "@vendor-bot",
+  "source_type": "npm",
   "fetch": {
     "auth": "none",
     "rate_limit": "1000/h"
@@ -22,6 +23,9 @@
         "tarball": "openai-4.0.0.tgz"
       }
     }
+  },
+  "security": {
+    "allowed_domains": ["registry.npmjs.org"]
   },
   "firecrawl": false
 }

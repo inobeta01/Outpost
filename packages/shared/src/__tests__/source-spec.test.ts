@@ -1,10 +1,13 @@
 /**
  * Tests for @outpost/source-spec.
  *
- * Two goals:
+ * Three goals:
  *   1. Every example source under `sources/` validates successfully.
  *      If it doesn't, the schema is wrong.
- *   2. A handful of intentionally bad inputs are rejected with
+ *   2. Every example source carries the required structured-lane
+ *      (`source_type`) or unstructured-lane (`extraction_strategy`)
+ *      discriminator that PR 2 dispatches on.
+ *   3. A handful of intentionally bad inputs are rejected with
  *      path-aware error messages — guards against future schema drift
  *      that loosens validation.
  *
@@ -24,6 +27,9 @@ import {
   isUnstructured,
   SourceSpecValidationError,
   validateSourceSpec,
+  type AnchorSource,
+  type ExtractionStrategy,
+  type StructuredSourceType,
   type SourceSpec,
 } from "../index.ts";
 
@@ -52,6 +58,30 @@ async function listExampleSources(): Promise<
   return out;
 }
 
+const STRUCTURED_TYPES: ReadonlySet<StructuredSourceType> = new Set([
+  "openapi",
+  "npm",
+  "pypi",
+  "github_releases",
+  "git_tracked_file",
+]);
+
+const STRATEGIES: ReadonlySet<ExtractionStrategy> = new Set([
+  "single_page",
+  "index_then_detail",
+  "paginated_index",
+  "raw_file",
+  "rss",
+]);
+
+const ANCHOR_SOURCES: ReadonlySet<AnchorSource> = new Set([
+  "url_slug",
+  "heading",
+  "inline_regex",
+  "feed_field",
+  "none",
+]);
+
 describe("example sources", () => {
   it("validates every JSON file under sources/", async () => {
     const sources = await listExampleSources();
@@ -73,27 +103,92 @@ describe("example sources", () => {
     assert.ok(structured.length >= 4, "expected ≥4 structured examples");
     assert.ok(unstructured.length >= 1, "expected ≥1 unstructured example");
   });
+
+  it("every example carries the PR 2 dispatch fields", async () => {
+    const sources = await listExampleSources();
+    for (const { relPath, spec } of sources) {
+      if (isStructured(spec)) {
+        assert.ok(
+          STRUCTURED_TYPES.has(spec.source_type),
+          `${relPath}: structured.source_type must be a closed enum value, got ${spec.source_type}`,
+        );
+        assert.ok(
+          spec.security.allowed_domains.length >= 1,
+          `${relPath}: structured.security.allowed_domains must be non-empty`,
+        );
+      } else {
+        assert.ok(
+          STRATEGIES.has(spec.extraction_strategy),
+          `${relPath}: unstructured.extraction_strategy must be a closed enum value, got ${spec.extraction_strategy}`,
+        );
+        assert.ok(
+          ANCHOR_SOURCES.has(spec.anchor_source),
+          `${relPath}: unstructured.anchor_source must be a closed enum value, got ${spec.anchor_source}`,
+        );
+        assert.ok(
+          spec.security.allowed_domains.length >= 1,
+          `${relPath}: unstructured.security.allowed_domains must be non-empty`,
+        );
+      }
+    }
+  });
+
+  it("covers at least 2 distinct structured source_types and 1 strategy", async () => {
+    const sources = await listExampleSources();
+    const types = new Set<StructuredSourceType>();
+    const strategies = new Set<ExtractionStrategy>();
+    for (const { spec } of sources) {
+      if (isStructured(spec)) types.add(spec.source_type);
+      else strategies.add(spec.extraction_strategy);
+    }
+    assert.ok(types.size >= 2, `expected ≥2 distinct structured source_types, got ${types.size}`);
+    assert.ok(strategies.size >= 1, `expected ≥1 extraction_strategy, got ${strategies.size}`);
+  });
 });
 
 describe("validation rejects bad inputs", () => {
-  it("rejects missing required fields", async () => {
-    await assert.rejects(
-      validateSourceSpec({ id: "x", kind: "structured", owner: "@a", fetch: { auth: "none" } }),
-      (err: unknown) => {
-        assert.ok(err instanceof SourceSpecValidationError);
-        assert.ok(err.issues.length > 0);
-        return true;
-      },
-    );
-  });
-
-  it("rejects an unstructured source missing selectors", async () => {
+  it("rejects a structured source missing source_type", async () => {
     const bad = {
       id: "example.com/bad",
-      kind: "unstructured",
+      kind: "structured",
       owner: "@a",
-      fetch: { auth: "none", url: "https://example.com/changelog", type: "firecrawl" },
-      firecrawl: true,
+      fetch: { auth: "none" },
+      endpoints: {
+        x: { url: "https://example.com/api", kind: "list" },
+      },
+      security: { allowed_domains: ["example.com"] },
+      firecrawl: false,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects a structured source missing security.allowed_domains", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "structured",
+      owner: "@a",
+      source_type: "openapi",
+      fetch: { auth: "none" },
+      endpoints: {
+        x: { url: "https://example.com/api", kind: "list" },
+      },
+      firecrawl: false,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects an empty security.allowed_domains array", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "structured",
+      owner: "@a",
+      source_type: "openapi",
+      fetch: { auth: "none" },
+      endpoints: {
+        x: { url: "https://example.com/api", kind: "list" },
+      },
+      security: { allowed_domains: [] },
+      firecrawl: false,
     };
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
   });
@@ -103,10 +198,12 @@ describe("validation rejects bad inputs", () => {
       id: "example.com/bad",
       kind: "structured",
       owner: "@a",
+      source_type: "openapi",
       fetch: { auth: "none" },
       endpoints: {
         x: { url: "https://example.com/api", kind: "list" },
       },
+      security: { allowed_domains: ["example.com"] },
       firecrawl: true,
     };
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
@@ -117,10 +214,12 @@ describe("validation rejects bad inputs", () => {
       id: "example.com/bad",
       kind: "structured",
       owner: "@a",
+      source_type: "openapi",
       fetch: { auth: "none" },
       endpoints: {
         x: { url: "http://example.com/api", kind: "list" },
       },
+      security: { allowed_domains: ["example.com"] },
       firecrawl: false,
     };
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
@@ -131,10 +230,12 @@ describe("validation rejects bad inputs", () => {
       id: "example.com/bad",
       kind: "structured",
       owner: "@a",
+      source_type: "openapi",
       fetch: { auth: "embedded_api_key" },
       endpoints: {
         x: { url: "https://example.com/api", kind: "list" },
       },
+      security: { allowed_domains: ["example.com"] },
       firecrawl: false,
     };
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
@@ -145,11 +246,68 @@ describe("validation rejects bad inputs", () => {
       id: "Has Spaces And Uppercase",
       kind: "structured",
       owner: "@a",
+      source_type: "openapi",
       fetch: { auth: "none" },
       endpoints: {
         x: { url: "https://example.com/api", kind: "list" },
       },
+      security: { allowed_domains: ["example.com"] },
       firecrawl: false,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects an unstructured source missing extraction_strategy", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "unstructured",
+      owner: "@a",
+      fetch: { auth: "none", url: "https://example.com/changelog", type: "firecrawl", fetch_method: "scrape" },
+      security: { allowed_domains: ["example.com"] },
+      anchor_source: "url_slug",
+      firecrawl: true,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects an unstructured source missing anchor_source", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "unstructured",
+      owner: "@a",
+      extraction_strategy: "single_page",
+      fetch: { auth: "none", url: "https://example.com/changelog", type: "firecrawl", fetch_method: "scrape" },
+      security: { allowed_domains: ["example.com"] },
+      firecrawl: true,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects fetch_method other than 'scrape'", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "unstructured",
+      owner: "@a",
+      extraction_strategy: "single_page",
+      fetch: { auth: "none", url: "https://example.com/changelog", type: "firecrawl", fetch_method: "crawl" },
+      security: { allowed_domains: ["example.com"] },
+      anchor_source: "url_slug",
+      firecrawl: true,
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("rejects a non-positive staleness_sentinel.max_inactivity_days", async () => {
+    const bad = {
+      id: "example.com/bad",
+      kind: "unstructured",
+      owner: "@a",
+      extraction_strategy: "single_page",
+      fetch: { auth: "none", url: "https://example.com/changelog", type: "firecrawl", fetch_method: "scrape" },
+      security: { allowed_domains: ["example.com"] },
+      anchor_source: "url_slug",
+      staleness_sentinel: { max_inactivity_days: 0 },
+      firecrawl: true,
     };
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
   });

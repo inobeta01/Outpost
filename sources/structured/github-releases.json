@@ -2,6 +2,7 @@
   "id": "github.com/anthropics/anthropic-sdk-typescript",
   "kind": "structured",
   "owner": "@vendor-bot",
+  "source_type": "github_releases",
   "fetch": {
     "auth": "github_token_env",
     "rate_limit": "5000/h"
@@ -15,6 +16,9 @@
         "repo": "anthropic-sdk-typescript"
       }
     }
+  },
+  "security": {
+    "allowed_domains": ["api.github.com"]
   },
   "firecrawl": false
 }

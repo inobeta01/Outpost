@@ -10,21 +10,32 @@
  * it at PR time.
  *
  * PR 1 lands the schema, types, validator, and 5 example sources
- * (4 structured + 1 unstructured). PR 2 adds sandbox-runner; PR 3
- * adds the host loop and artifact envelope.
+ * (4 structured + 1 unstructured). PR 2 fills in
+ * `packages/ingestion/src/sources/{structured,unstructured}/` — the
+ * adapter and strategy code that runs inside the sandbox.
  */
 
-export const SOURCE_SPEC_VERSION = "0.0.0" as const;
+export const SOURCE_SPEC_VERSION = "0.1.0" as const;
 
 export type {
+  AnchorSource,
   Endpoint,
   EndpointKind,
+  ExtractionStrategy,
   FetchAuth,
   FetchConfig,
+  SecurityConfig,
   SourceSpec,
+  StalenessSentinel,
+  StrategyConfig,
+  StrategyConfigIndexThenDetail,
+  StrategyConfigPaginatedIndex,
+  StrategyConfigRawFile,
+  StrategyConfigRss,
+  StrategyConfigSinglePage,
   StructuredSource,
+  StructuredSourceType,
   UnstructuredFetchConfig,
-  UnstructuredSelectors,
   UnstructuredSource,
 } from "./schema.js";
 

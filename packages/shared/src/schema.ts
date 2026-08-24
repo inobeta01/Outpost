@@ -39,29 +39,130 @@ export interface Endpoint {
   readonly variables?: Readonly<Record<string, string>>;
 }
 
-/** CSS selectors for parsing one entry out of an unstructured page. */
-export interface UnstructuredSelectors {
-  readonly entry: string;
-  readonly title: string;
-  readonly date: string;
+/**
+ * Closed enum of structured source types. Per ADR §2, P1.1 is a dumb
+ * switch statement on this value — no runtime inference. To add a new
+ * structured source type, add it here AND in the JSON Schema's
+ * `source_type.enum` AND write an adapter in
+ * `packages/ingestion/src/sources/structured/adapters/`.
+ */
+export type StructuredSourceType =
+  | "openapi"
+  | "npm"
+  | "pypi"
+  | "github_releases"
+  | "git_tracked_file";
+
+/**
+ * Defense-in-depth domain allowlist (ADR §2). Redundant with the
+ * URL's own domain for well-formed configs; protects against a
+ * malicious or sloppy community PR that points a URL somewhere
+ * unexpected. The sandbox rejects any fetch whose target domain is
+ * not in this list, independent of the URL string.
+ */
+export interface SecurityConfig {
+  readonly allowed_domains: ReadonlyArray<string>;
 }
 
 /**
- * Unstructured (prose) source. The `fetch.url` is a single page crawled
- * by Firecrawl; entries are extracted via `selectors`. v1 Firecrawl only.
+ * Per ADR §9.1, the extraction strategy is a declared, human-verified
+ * config property, never inferred at runtime. Closed enum. Adding a
+ * new strategy requires a new entry here, in the schema's
+ * `extraction_strategy.enum`, and a new strategy file in
+ * `packages/ingestion/src/sources/unstructured/extractors/`.
  */
-export interface UnstructuredFetchConfig extends FetchConfig {
+export type ExtractionStrategy =
+  | "single_page"
+  | "index_then_detail"
+  | "paginated_index"
+  | "raw_file"
+  | "rss";
+
+/** Per ADR §10.2, where the version/date identifier for an entry comes from. */
+export type AnchorSource =
+  | "url_slug"
+  | "heading"
+  | "inline_regex"
+  | "feed_field"
+  | "none";
+
+/**
+ * Per-strategy config blocks. Exactly one applies, chosen by
+ * `extraction_strategy`. The schema's `oneOf` enforces this at
+ * validation time; the discriminated union gives the same
+ * narrowing to TypeScript.
+ */
+export interface StrategyConfigSinglePage {
+  readonly index_url: string;
+}
+
+export interface StrategyConfigIndexThenDetail {
+  readonly index_url: string;
+  /** Regex (no anchors) matching href of an entry-detail link on the index page. */
+  readonly entry_link_pattern: string;
+}
+
+export interface StrategyConfigPaginatedIndex {
+  readonly index_url: string;
+  readonly pagination: {
+    readonly param: string;
+    readonly max_pages: number;
+  };
+}
+
+export interface StrategyConfigRawFile {
+  readonly file_url: string;
+}
+
+export interface StrategyConfigRss {
+  readonly rss_url: string;
+}
+
+export type StrategyConfig =
+  | StrategyConfigSinglePage
+  | StrategyConfigIndexThenDetail
+  | StrategyConfigPaginatedIndex
+  | StrategyConfigRawFile
+  | StrategyConfigRss;
+
+/**
+ * Unstructured (prose) source. `fetch.url` is the page (or file/feed)
+ * fetched; how it's fetched depends on `extraction_strategy` and
+ * `fetch_method`. v1: Firecrawl `scrape` is the only browser path;
+ * `raw_file` and `rss` use direct HTTPS GET.
+ */
+export interface UnstructuredFetchConfig {
   readonly auth: "none" | "generic_bearer_env";
   readonly url: string;
   readonly type: "firecrawl";
+  /** Per ADR §2 — only `scrape` is allowed. `crawl`/`map` are out of scope. */
+  readonly fetch_method: "scrape";
+  readonly rate_limit?: string;
+}
+
+/** Optional staleness sentinel. Per ADR §9.6. */
+export interface StalenessSentinel {
+  readonly max_inactivity_days?: number;
 }
 
 export interface UnstructuredSource {
   readonly id: string;
   readonly kind: "unstructured";
   readonly owner: string;
+  readonly extraction_strategy: ExtractionStrategy;
+  readonly strategy_config?: StrategyConfig;
   readonly fetch: UnstructuredFetchConfig;
-  readonly selectors: UnstructuredSelectors;
+  readonly security: SecurityConfig;
+  /**
+   * Per ADR §10.2 — locked per source at onboarding. Precedence
+   * (url_slug > heading > inline_regex > feed_field > none) is
+   * the runtime fallback order, but in practice each source
+   * pins one.
+   */
+  readonly anchor_source: AnchorSource;
+  /** Regex with at least one capture group. Required when anchor_source is url_slug/heading/inline_regex. */
+  readonly anchor_pattern?: string;
+  readonly staleness_sentinel?: StalenessSentinel;
   readonly firecrawl: true;
 }
 
@@ -74,8 +175,10 @@ export interface StructuredSource {
   readonly id: string;
   readonly kind: "structured";
   readonly owner: string;
+  readonly source_type: StructuredSourceType;
   readonly fetch: FetchConfig;
   readonly endpoints: Readonly<Record<string, Endpoint>>;
+  readonly security: SecurityConfig;
   readonly firecrawl: false;
 }
 
