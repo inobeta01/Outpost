@@ -11,36 +11,30 @@
  * never write to the registry DB, never run LLM calls, never normalize.
  * P2 owns all of those.
  *
- * Slice 2 (this PR) lands the structured adapter layer:
- *   - sources/structured/types.ts     — SourceAdapter interface,
- *                                       NormalizedArtifact output
- *   - sources/structured/source-registry.ts — dispatch map keyed by
- *                                             source_type
- *   - sources/structured/adapters/    — one file per source_type
- *                                       (openapi, npm, pypi,
- *                                       github_releases)
+ * Slice 2 landed the structured adapter layer (per source_type).
+ * Slice 3 (this PR) lands the unstructured SHARED modules:
+ *   - content-validity — ADR §9.5 (bot-challenge sanitization)
+ *   - staleness-sentinel — ADR §9.6 (per-source inactivity check)
+ *   - anchor/ — ADR §10 (deterministic version/date anchor parsing)
+ *   - strategy-registry — dispatch map keyed by extraction_strategy
+ *   - types — the 3-step contract (resolve_items / fetch_item / derive_anchor)
  *
- * Slice 3 will land the unstructured shared modules
- * (content-validity, staleness-sentinel, anchor derivation).
- * Slice 4 will land the 5 extraction strategies.
+ * Slice 4 will land the 5 extraction strategies themselves
+ * (single_page, index_then_detail, paginated_index, raw_file, rss).
  *
  * The `@outpost/sandbox-runner` dependency is listed but NOT yet
  * imported anywhere — sandbox is out of scope for this PR per
- * project decision; someone else owns it. The adapter code is
- * written as pure functions so it can be wrapped by a sandbox
- * later without refactor.
+ * project decision; someone else owns it. The adapter/strategy
+ * code is written as pure functions so it can be wrapped by a
+ * sandbox later without refactor.
  *
- * NOTE: The host loop (PR 3) is not in this package yet. This PR
- * only ships the adapter/strategy code that the host loop will
- * invoke.
+ * NOTE: The host loop (PR 3) is not in this package yet. Slices
+ * 2-4 only ship the code that the host loop will invoke.
  */
 
-export const INGESTION_VERSION = "0.1.0" as const;
+export const INGESTION_VERSION = "0.2.0" as const;
 
-// Re-export the structured-source barrel. Importing this file
-// wires every adapter into the registry. The host loop (PR 3) and
-// tests should import this barrel; importing individual files will
-// leave the registry empty for that source_type.
+// --- Structured lane (Slice 2) ---
 export {
   getStructuredAdapter,
   registerStructuredAdapter,
@@ -55,3 +49,41 @@ export {
   type FetchMetadata,
   type AdapterErrorCode,
 } from "./sources/structured/index.js";
+
+// --- Unstructured lane shared modules (Slice 3) ---
+// Re-exports of the cross-cutting modules every strategy uses.
+export {
+  validateContent,
+  type ContentValidityResult,
+  type ContentValidityInput,
+} from "./sources/unstructured/content-validity.js";
+
+export {
+  checkStaleness,
+  type StalenessCheckInput,
+  type StalenessCheckResult,
+} from "./sources/unstructured/staleness-sentinel.js";
+
+export {
+  deriveAnchor,
+  ANCHOR_PRECEDENCE,
+  type AnchorSpec,
+  type AnchorDeriveInput,
+  type DerivedAnchor,
+  type AnchorType,
+  type AnchorMechanism,
+} from "./sources/unstructured/anchor/derive-anchor.js";
+
+export {
+  getStrategy,
+  registerStrategy,
+  listRegisteredStrategies,
+  type ExtractionStrategyAdapter,
+  type ResolveItemsInput,
+  type ResolveItemsOutput,
+  type FetchItemInput,
+  type FetchItemOutput,
+  type ExtractionTelemetry,
+  StrategyExecutionError,
+  type StrategyExecutionErrorCode,
+} from "./sources/unstructured/strategy-registry.js";
