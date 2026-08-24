@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://outpost.dev/schemas/source-spec.schema.json",
+  "title": "Outpost Source Specification",
+  "description": "Typed configuration for a single ingestible source. The blast radius of any source lives in this file: a JSON Schema validated at PR time, plus a curated allowlist of source IDs shipped in the repo. This is the contract between the ingestion host (P1, less-trusted, community-contributed adapters) and the registry core (P2+).",
+  "type": "object",
+  "required": ["id", "kind", "owner"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9.\\-_/]*$",
+      "description": "Stable, globally-unique source identifier. Convention: `<vendor-domain>/<package-or-repo>`, e.g. `github.com/anthropics/anthropic-sdk-typescript`, `npm/openai`, `pypi/requests`, `stripe.com/changelog`."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["structured", "unstructured"],
+      "description": "Discriminator. `structured` = machine-readable endpoints (OpenAPI, npm, PyPI, GitHub releases). `unstructured` = prose pages fetched via Firecrawl."
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Handle (e.g. `@vendor-bot`) of the curator maintaining this source spec. The plan calls this out as a required field — provenance matters when a config file effectively allowlists network egress."
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/structuredSource" },
+    { "$ref": "#/$defs/unstructuredSource" }
+  ],
+  "$defs": {
+    "structuredSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "owner", "fetch", "endpoints"],
+      "properties": {
+        "id": { "$ref": "#/$defs/idField" },
+        "kind": { "const": "structured" },
+        "owner": { "$ref": "#/properties/owner" },
+        "fetch": { "$ref": "#/$defs/fetchConfig" },
+        "endpoints": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/endpoint" },
+          "description": "Map of named endpoint → fetch definition. Structured sources have one or more typed endpoints; the adapter picks the right one at runtime."
+        },
+        "firecrawl": { "const": false }
+      }
+    },
+    "unstructuredSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "owner", "fetch", "selectors"],
+      "properties": {
+        "id": { "$ref": "#/$defs/idField" },
+        "kind": { "const": "unstructured" },
+        "owner": { "$ref": "#/properties/owner" },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["auth", "url", "type"],
+          "properties": {
+            "auth": {
+              "type": "string",
+              "enum": ["none", "generic_bearer_env"]
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https://",
+              "description": "Page URL to crawl. Must be https. Firecrawl is the only allowed fetch path for unstructured sources in v1."
+            },
+            "type": { "const": "firecrawl" },
+            "rate_limit": {
+              "type": "string",
+              "pattern": "^[0-9]+/(s|m|h)$"
+            }
+          }
+        },
+        "selectors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entry", "title", "date"],
+          "properties": {
+            "entry": { "type": "string", "minLength": 1, "description": "CSS selector for one changelog entry." },
+            "title": { "type": "string", "minLength": 1, "description": "CSS selector for the entry title (scoped under `entry`)." },
+            "date": { "type": "string", "minLength": 1, "description": "CSS selector for the entry date (scoped under `entry`); value is parsed from `datetime` attribute when present." }
+          }
+        },
+        "firecrawl": { "const": true }
+      }
+    },
+    "fetchConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auth"],
+      "properties": {
+        "auth": {
+          "type": "string",
+          "enum": ["none", "github_token_env", "npm_token_env", "pypi_token_env", "generic_bearer_env"],
+          "description": "How the sandbox acquires credentials. Only environment-variable-based auth is allowed in v1 — never embedded secrets."
+        },
+        "rate_limit": {
+          "type": "string",
+          "pattern": "^[0-9]+/(s|m|h)$",
+          "description": "Per-source outbound rate limit, e.g. `5000/h`. Enforced inside the sandbox; the adapter is not trusted to self-throttle."
+        }
+      }
+    },
+    "idField": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9.\\-_/]*$"
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "kind"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "URL or URL template for the endpoint. Templates use `{var}` placeholders, e.g. `https://api.github.com/repos/{owner}/{repo}/releases`. Variables must be declared in `variables`."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["list", "object", "spec", "raw"],
+          "description": "Shape the adapter should expect. `list` = array of items, `object` = single keyed document, `spec` = OpenAPI/GraphQL spec, `raw` = opaque bytes (e.g. tarball)."
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 },
+          "description": "Variable bindings for the `url` template. Required when the URL contains `{var}` placeholders."
+        }
+      }
+    }
+  }
+}

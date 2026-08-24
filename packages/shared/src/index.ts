@@ -9,9 +9,26 @@
  * provider config CAN express, and the JSON Schema validator enforces
  * it at PR time.
  *
- * NOTE: PR 1 will replace this stub with the real source-spec schema
- * (per the Ingestion Implementation Plan) and 3 example provider
- * sources (GitHub releases, npm, one Firecrawl unstructured).
+ * PR 1 lands the schema, types, validator, and 5 example sources
+ * (4 structured + 1 unstructured). PR 2 adds sandbox-runner; PR 3
+ * adds the host loop and artifact envelope.
  */
 
 export const SOURCE_SPEC_VERSION = "0.0.0" as const;
+
+export type {
+  Endpoint,
+  EndpointKind,
+  FetchAuth,
+  FetchConfig,
+  SourceSpec,
+  StructuredSource,
+  UnstructuredFetchConfig,
+  UnstructuredSelectors,
+  UnstructuredSource,
+} from "./schema.js";
+
+export { isStructured, isUnstructured } from "./schema.js";
+
+export { validateSourceSpec } from "./validate.js";
+export { SourceSpecValidationError } from "./validate.js";

@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-schemas.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'no tests yet' && exit 0",
+    "test": "node --test --import tsx/esm src/__tests__/*.test.ts",
     "lint": "echo 'lint not configured yet' && exit 0",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
@@ -33,6 +33,8 @@
     "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0"
   }
 }

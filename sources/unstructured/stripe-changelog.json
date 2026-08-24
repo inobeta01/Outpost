@@ -1,0 +1,16 @@
+{
+  "id": "stripe.com/changelog",
+  "kind": "unstructured",
+  "owner": "@vendor-bot",
+  "fetch": {
+    "auth": "none",
+    "url": "https://stripe.com/changelog",
+    "type": "firecrawl"
+  },
+  "selectors": {
+    "entry": "article",
+    "title": "h2",
+    "date": "time[datetime]"
+  },
+  "firecrawl": true
+}
