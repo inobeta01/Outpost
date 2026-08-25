@@ -48,10 +48,14 @@ export {
   type ResolveItemsOutput,
   type FetchItemInput,
   type FetchItemOutput,
+  type ResolvedItem,
+  type ScrapeClient,
   type ExtractionTelemetry,
   StrategyExecutionError,
   type StrategyExecutionErrorCode,
 } from "./strategy-registry.js";
+
+export { buildAnchorInput } from "./anchor-input.js";
 
 // Side-effect imports — register the 5 extraction strategies
 // (single_page, index_then_detail, paginated_index, raw_file, rss)

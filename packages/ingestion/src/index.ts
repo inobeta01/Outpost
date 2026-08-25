@@ -39,6 +39,7 @@ export {
   getStructuredAdapter,
   registerStructuredAdapter,
   listRegisteredSourceTypes,
+  withStubAdapter,
   AdapterError,
   type SourceAdapter,
   type NormalizedArtifact,
@@ -83,7 +84,36 @@ export {
   type ResolveItemsOutput,
   type FetchItemInput,
   type FetchItemOutput,
+  type ResolvedItem,
+  type ScrapeClient,
   type ExtractionTelemetry,
   StrategyExecutionError,
   type StrategyExecutionErrorCode,
 } from "./sources/unstructured/strategy-registry.js";
+
+export { buildAnchorInput } from "./sources/unstructured/anchor-input.js";
+
+// --- Host loop (PR 3) ---
+export {
+  runIngestion,
+  type RunIngestionOptions,
+  type RunReport,
+  type PerSourceOutcome,
+} from "./host/orchestrator.js";
+export { runStructuredSource, type StructuredRunResult } from "./host/structured-lane.js";
+export { runUnstructuredSource, type UnstructuredRunResult } from "./host/unstructured-lane.js";
+export { loadSources, type LoadedSource, type LoadFailure, type LoadReport } from "./host/source-loader.js";
+export {
+  StateStore,
+  initialState,
+  loadOrInit,
+  type SourceState,
+  type EntryState,
+  type FsLike,
+} from "./host/state-store.js";
+export {
+  InMemoryP2Receiver,
+  P2TransportError,
+  type P2Receiver,
+  type P2PushResult,
+} from "./host/p2-receiver.js";

@@ -83,3 +83,34 @@ export function getStructuredAdapter(
 export function listRegisteredSourceTypes(): ReadonlyArray<StructuredSourceType> {
   return Array.from(registry.keys());
 }
+
+/**
+ * Test-only: replace the adapter for one source_type with a stub,
+ * run the body, and restore. Used by PR3 host-loop tests that need
+ * to drive a stub adapter without colliding with the production
+ * registration.
+ *
+ * ```ts
+ * import { withStubAdapter } from "@outpost/ingestion";
+ * await withStubAdapter("github_releases", stubAdapter, async () => {
+ *   // ...call into the host loop...
+ * });
+ * ```
+ */
+export async function withStubAdapter<T>(
+  sourceType: StructuredSourceType,
+  adapter: SourceAdapter,
+  body: () => Promise<T>,
+): Promise<T> {
+  const previous = registry.get(sourceType);
+  registry.set(sourceType, adapter);
+  try {
+    return await body();
+  } finally {
+    if (previous) {
+      registry.set(sourceType, previous);
+    } else {
+      registry.delete(sourceType);
+    }
+  }
+}

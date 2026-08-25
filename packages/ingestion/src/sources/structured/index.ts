@@ -28,6 +28,7 @@ export {
   getStructuredAdapter,
   registerStructuredAdapter,
   listRegisteredSourceTypes,
+  withStubAdapter,
 } from "./source-registry.js";
 
 // Side-effect imports — these register each adapter at module-load time.

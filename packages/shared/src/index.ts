@@ -43,3 +43,10 @@ export { isStructured, isUnstructured } from "./schema.js";
 
 export { validateSourceSpec } from "./validate.js";
 export { SourceSpecValidationError } from "./validate.js";
+
+export type {
+  Artifact,
+  DetectionMethod,
+  DerivedAnchorEnvelope,
+  FetchProvenance,
+} from "./artifact.js";
