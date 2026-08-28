@@ -190,11 +190,19 @@ export async function runIngestion(opts: RunIngestionOptions): Promise<RunReport
       if (r.status === "success") {
         backfilled++;
         artifactsPushedBackfill += r.artifacts.length;
+        // Surface adapter warnings (e.g. PyPI detail-budget cap)
+        // alongside the host's own summary warnings.
+        for (const w of r.warnings) {
+          warnings.push(`${o.file}: ${w}`);
+        }
       } else if (r.status === "backfill_skipped") {
         backfillSkipped++;
         warnings.push(`${o.file}: ${r.message}`);
       } else if (r.status === "failed") {
         backfillFailed++;
+        for (const w of r.warnings) {
+          warnings.push(`${o.file}: ${w}`);
+        }
         warnings.push(`${o.file}: ${r.message}`);
       } else if (r.status === "skipped") {
         backfillSkippedAlready++;
@@ -253,6 +261,7 @@ async function dispatchOne(
         message: `unstructured backfill is deferred; source ${spec.id} skipped`,
         planEventCount: 0,
         droppedObservationCount: 0,
+        warnings: [],
       };
       return {
         kind: "structured_backfill",

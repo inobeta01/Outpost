@@ -521,4 +521,51 @@ describe("structured-backfill host execution", () => {
       });
     });
   });
+
+  it("propagates adapter warnings into the host result on success", async () => {
+    const fs = new MemFs();
+    const state = new StateStore({ baseDir: "/state", fs });
+    const p2 = new InMemoryP2Receiver();
+    const adapter: SourceAdapter = {
+      source_type: "npm",
+      fetch: () => Promise.reject(new Error("unused")),
+      async backfill(): Promise<BackfillResult> {
+        return {
+          artifacts: [normalizedArtifact("1.0.0")],
+          plan: {
+            events: [
+              {
+                type: "backfill_pair",
+                fromVersion: "0.9.0",
+                toVersion: "1.0.0",
+              } satisfies BackfillPlanEvent,
+            ],
+            finalState: { lastSeenVersion: "1.0.0", lastSeenHash: "h1" },
+            droppedObservations: [],
+          },
+          observations: [],
+          checkpoint: null,
+          warnings: [
+            "pypi_detail_budget_exceeded: 50 of 250 in-window versions fall back to index-only summaries",
+          ],
+        };
+      },
+    };
+    await withStubAdapter("npm", adapter, async () => {
+      const result = await runStructuredBackfill({
+        source,
+        now: "2026-08-25T12:00:00.000Z",
+        deps: {
+          fetch: () => Promise.reject(new Error("unused")),
+          readEnv: () => undefined,
+        },
+        state,
+        p2,
+      });
+      assert.equal(result.status, "success");
+      assert.deepEqual(result.warnings, [
+        "pypi_detail_budget_exceeded: 50 of 250 in-window versions fall back to index-only summaries",
+      ]);
+    });
+  });
 });

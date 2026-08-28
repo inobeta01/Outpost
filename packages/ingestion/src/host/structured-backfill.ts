@@ -73,6 +73,8 @@ export interface StructuredBackfillResult {
   readonly planEventCount: number;
   /** Number of observations dropped by the age filter. */
   readonly droppedObservationCount: number;
+  /** Adapter warnings (e.g. detail-budget cap hit) — operator-visible. */
+  readonly warnings: ReadonlyArray<string>;
 }
 
 export interface StructuredBackfillOptions {
@@ -121,6 +123,7 @@ export async function runStructuredBackfill(
       message: `state file unreadable for ${source.id}: ${(cause as Error).message}`,
       planEventCount: 0,
       droppedObservationCount: 0,
+      warnings: [],
     };
   }
   if (prev.kind !== "structured") {
@@ -132,6 +135,7 @@ export async function runStructuredBackfill(
       message: `state kind drift for ${source.id}`,
       planEventCount: 0,
       droppedObservationCount: 0,
+      warnings: [],
     };
   }
 
@@ -145,6 +149,7 @@ export async function runStructuredBackfill(
       message: `backfill already complete for ${source.id}; pass --force to re-run`,
       planEventCount: 0,
       droppedObservationCount: 0,
+      warnings: [],
     };
   }
 
@@ -198,6 +203,7 @@ export async function runStructuredBackfill(
         message: `${source.source_type} does not support backfill: ${err.message}`,
         planEventCount: 0,
         droppedObservationCount: 0,
+        warnings: [],
       };
     }
     // Mid-pagination failure with a resume marker: persist the
@@ -220,6 +226,7 @@ export async function runStructuredBackfill(
       message: `adapter ${source.source_type} for ${source.id} threw: ${(err as Error).message}`,
       planEventCount: 0,
       droppedObservationCount: 0,
+      warnings: [],
     };
   }
 
@@ -254,6 +261,7 @@ export async function runStructuredBackfill(
         message: `p2.push threw mid-backfill for ${source.id}: ${(cause as Error).message}`,
         planEventCount: result.plan.events.length,
         droppedObservationCount: result.plan.droppedObservations.length,
+        warnings: result.warnings ?? [],
       };
     }
     if (!pushResult.ok) {
@@ -265,6 +273,7 @@ export async function runStructuredBackfill(
         message: `p2 rejected artifact mid-backfill for ${source.id}: ${pushResult.reason}`,
         planEventCount: result.plan.events.length,
         droppedObservationCount: result.plan.droppedObservations.length,
+        warnings: result.warnings ?? [],
       };
     }
   }
@@ -294,6 +303,7 @@ export async function runStructuredBackfill(
     message: `pushed ${envelopes.length} backfill artifact(s) for ${source.id}`,
     planEventCount: result.plan.events.length,
     droppedObservationCount: result.plan.droppedObservations.length,
+    warnings: result.warnings ?? [],
   };
 }
 

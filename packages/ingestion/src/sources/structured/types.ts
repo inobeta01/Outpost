@@ -319,4 +319,10 @@ export interface BackfillResult {
    * the full history was consumed.
    */
   readonly checkpoint?: string | null;
+  /**
+   * Non-fatal diagnostics the operator should see in the run report
+   * (e.g. PyPI's `pypi_detail_budget_exceeded`). Success with
+   * warnings is still success.
+   */
+  readonly warnings?: ReadonlyArray<string>;
 }

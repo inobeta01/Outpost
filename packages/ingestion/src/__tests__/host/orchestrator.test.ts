@@ -340,5 +340,68 @@ describe("orchestrator (end-to-end)", () => {
         assert.equal(p2.artifacts.length, 1);
       });
     });
+
+    it("propagates adapter warnings into backfillSummary.warnings", async () => {
+      const fs = new MemFs();
+      fs.files.set("/sources/structured.json", JSON.stringify(STRUCTURED));
+      fs.list = [{ name: "structured.json", isFile: () => true }];
+      const adapter: SourceAdapter = {
+        fetch: () => Promise.reject(new Error("unused")),
+        async backfill(): Promise<BackfillResult> {
+          return {
+            artifacts: [
+              {
+                source_id: "github.com/x/y",
+                source_type: "github_releases",
+                version: "1.0.1",
+                content_hash: "h1",
+                raw_bytes: "{}",
+                raw_content_type: "application/json",
+                detection_method: "version_bump",
+                detected_at: "2026-08-25T12:00:00.000Z",
+                fetch_metadata: {
+                  url: "https://api.github.com/repos/x/y/releases",
+                  auth: "github_token_env",
+                  status: 200,
+                  contentType: "application/json",
+                },
+              } satisfies NormalizedArtifact,
+            ],
+            plan: {
+              events: [
+                { type: "backfill_pair", fromVersion: "1.0.0", toVersion: "1.0.1" },
+              ],
+              finalState: { lastSeenVersion: "1.0.1", lastSeenHash: "h1" },
+              droppedObservations: [],
+            },
+            observations: [],
+            checkpoint: null,
+            warnings: ["pypi_detail_budget_exceeded: 5 of 5 versions fell back to index-only"],
+          };
+        },
+      };
+      const p2 = new InMemoryP2Receiver();
+      await withStubAdapter("github_releases", adapter, async () => {
+        const report = await runIngestion({
+          sourcesDir: "/sources",
+          stateDir: "/state",
+          now: "2026-08-25T12:00:00.000Z",
+          mode: "backfill",
+          deps: {
+            fetch: () => Promise.reject(new Error("unused")),
+            readEnv: () => undefined,
+            scrape: stubScrape,
+          },
+          p2,
+          fs,
+        });
+        assert.ok(report.backfillSummary);
+        const warnings = report.backfillSummary?.warnings ?? [];
+        assert.ok(
+          warnings.some((w) => w.includes("pypi_detail_budget_exceeded: 5 of 5")),
+          `expected adapter warning to surface, got: ${JSON.stringify(warnings)}`,
+        );
+      });
+    });
   });
 });
