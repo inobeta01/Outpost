@@ -141,6 +141,17 @@ async function fetchOpenApi(
 export const openapiAdapter: SourceAdapter = {
   source_type: "openapi",
 
+  async backfill(source) {
+    // Per the backfill slice plan: an OpenAPI spec URL has no history
+    // to backfill — there's only ever a current snapshot. The host
+    // loop catches `backfill_unsupported` and emits a `backfill_skipped`
+    // outcome without mutating state.
+    throw new AdapterError(
+      "backfill_unsupported",
+      `openapi source ${source.id} has no history to backfill; only a current snapshot exists`,
+    );
+  },
+
   async fetch(source, ctx, deps) {
     const { body, url, status } = await fetchOpenApi(source, deps.fetch);
     const version = extractVersion(body);

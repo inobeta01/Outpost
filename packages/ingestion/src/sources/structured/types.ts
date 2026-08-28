@@ -154,6 +154,28 @@ export interface SourceAdapter {
     ctx: AdapterContext,
     deps: { fetch: FetchLike; readEnv: ReadEnvLike },
   ): Promise<NormalizedArtifact>;
+
+  /**
+   * One-time-onboarding backfill: enumerate the source's full
+   * history, compute an emission plan (per the three-rule model
+   * in `backfill-plan.ts`), and return one `NormalizedArtifact`
+   * per plan event.
+   *
+   * Adapters without vendor history (openapi, git_tracked_file)
+   * implement this as a one-liner that throws
+   * `AdapterError("backfill_unsupported", ...)`; the host loop
+   * catches that and emits a `backfill_skipped` outcome.
+   *
+   * `finalState.lastSeenHash` MUST be computed by the same code
+   * path as an incremental poll of the latest version (ADR §2.4).
+   * Crash before the host writes this state ⇒ safe retry on next run.
+   */
+  backfill(
+    source: StructuredSource,
+    ctx: AdapterContext,
+    deps: { fetch: FetchLike; readEnv: ReadEnvLike },
+    opts: BackfillOptions,
+  ): Promise<BackfillResult>;
 }
 
 /** Stable error codes the host loop can branch on. */
@@ -163,7 +185,8 @@ export type AdapterErrorCode =
   | "parse_error"
   | "schema_mismatch"
   | "unsupported_endpoint_kind"
-  | "security_violation";
+  | "security_violation"
+  | "backfill_unsupported";
 
 /**
  * Typed error thrown by adapters. Carries a code, a human-readable
@@ -178,4 +201,88 @@ export class AdapterError extends Error {
     this.code = code;
     this.cause = cause;
   }
+}
+
+/**
+ * Options for a backfill run, passed by the host loop. All fields
+ * optional; the host applies defaults from `backfill-plan.ts` if
+ * the spec doesn't override them.
+ *
+ * Per the backfill slice plan, the rules are:
+ *   - `maxAgeMs`      — outer age cap (default 5y)
+ *   - `recentWindowMs` — recent window for full-granularity (default 18m)
+ *   - `maxArtifacts`  — hard cap (default 35)
+ */
+export interface BackfillOptions {
+  /** ISO-8601 timestamp the host loop started the backfill. */
+  readonly now: string;
+  /** Optional pinned version — backfill range starts at this version if present. */
+  readonly baselineVersion?: string;
+  /** Maximum age of any version we consider. */
+  readonly maxAgeMs?: number;
+  /** Window inside which we emit consecutive pairs at full granularity. */
+  readonly recentWindowMs?: number;
+  /** Hard cap on total plan events. */
+  readonly maxArtifacts?: number;
+}
+
+/**
+ * Per-version summary extracted from a history endpoint. The adapter
+ * builds these from its vendor-specific response shape; the host loop
+ * never inspects them — it just hands them to `computeBackfillPlan`
+ * to produce the plan.
+ *
+ * Every field is `present-or-null` (not optional) under
+ * `exactOptionalPropertyTypes` so the plan-math doesn't have to
+ * disambiguate "missing" from "explicitly null."
+ */
+export interface VersionObservation {
+  readonly version: string;
+  /** ISO-8601 upload/publish timestamp, or null when the vendor doesn't expose it. */
+  readonly publishedAt: string | null;
+  /** npm: `dist.tarball`; PyPI: wheel/sdist URL; github: `html_url` or null. */
+  readonly tarballUrl: string | null;
+  /** npm: `dist.shasum`; null elsewhere. */
+  readonly shasum: string | null;
+  /** npm: `deprecated` field; PyPI: `yanked` from releases map; false elsewhere. */
+  readonly deprecated: boolean;
+  /** npm: `types`/`typings` field; null elsewhere. */
+  readonly typesPath: string | null;
+}
+
+/**
+ * The plan an adapter produces for a backfill run. The host loop
+ * turns each `events` entry into one `NormalizedArtifact`; the
+ * `finalState` is what gets written to `SourceState` at the end
+ * (per ADR §2.4 — must be produced by the same code path as an
+ * incremental poll of the latest version).
+ */
+export interface BackfillPlan {
+  readonly events: ReadonlyArray<{
+    readonly type: "backfill_pair" | "backfill_hop";
+    readonly fromVersion: string;
+    readonly toVersion: string;
+    /** Only set on hops: number of intermediate versions collapsed. */
+    readonly versionCount?: number;
+  }>;
+  /** Same finalState shape the incremental poll would write. */
+  readonly finalState: {
+    readonly lastSeenVersion: string;
+    readonly lastSeenHash: string;
+  };
+  /** Diagnostic: observations dropped by the age filter. */
+  readonly droppedObservations: ReadonlyArray<VersionObservation>;
+}
+
+/**
+ * The result of a successful backfill call. The adapter returns
+ * one `NormalizedArtifact` per plan event; the host loop converts
+ * each into the unified `Artifact` envelope with the backfill
+ * metadata fields populated.
+ */
+export interface BackfillResult {
+  readonly artifacts: ReadonlyArray<NormalizedArtifact>;
+  readonly plan: BackfillPlan;
+  /** All observations considered, for the run report + diagnostics. */
+  readonly observations: ReadonlyArray<VersionObservation>;
 }

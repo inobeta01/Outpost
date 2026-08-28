@@ -103,6 +103,18 @@ function parsePypiResponse(body: string): {
 export const pypiAdapter: SourceAdapter = {
   source_type: "pypi",
 
+  async backfill(source) {
+    // Step 6 of the backfill slice plan lands the full PyPI
+    // implementation (index + selective per-version detail fetches
+    // with a 200-call budget). For now this signals the adapter is
+    // registered but the implementation hasn't landed; host treats
+    // it as a skip via `backfill_unsupported`.
+    throw new AdapterError(
+      "backfill_unsupported",
+      `pypi backfill for ${source.id} lands in step 6 of the backfill slice plan`,
+    );
+  },
+
   async fetch(source, ctx, deps) {
     const endpoint = pickPackageEndpoint(source);
     const url = renderUrl(endpoint);

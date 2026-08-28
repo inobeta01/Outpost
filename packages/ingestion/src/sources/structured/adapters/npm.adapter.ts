@@ -28,8 +28,9 @@
 
 import type { Endpoint, StructuredSource } from "@outpost/shared";
 
-import { AdapterError, type SourceAdapter } from "../types.js";
+import { AdapterError, type SourceAdapter, type VersionObservation, type BackfillResult } from "../types.js";
 import { canonicalizeJson, sha256Hex } from "../canonical.js";
+import { computeBackfillPlan } from "../backfill-plan.js";
 import { registerStructuredAdapter } from "../source-registry.js";
 
 function pickPackageEndpoint(source: StructuredSource): Endpoint {
@@ -133,8 +134,151 @@ function resolveLatest(parsed: NpmPackageResponse): {
   );
 }
 
+/**
+ * Pull per-version `publishedAt` from the npm full-doc body's
+ * top-level `time` field. Returns a map of version → ISO-8601.
+ * Falls back to an empty map when the package has no `time` data
+ * (rare, but possible on freshly published or hand-crafted docs).
+ */
+function extractVersionTimes(parsed: NpmPackageResponse): Map<string, string> {
+  const out = new Map<string, string>();
+  const time = (parsed as { time?: unknown }).time;
+  if (!time || typeof time !== "object") return out;
+  const t = time as Record<string, unknown>;
+  for (const [k, v] of Object.entries(t)) {
+    if (k === "created" || k === "modified") continue;
+    if (typeof v === "string") out.set(k, v);
+  }
+  return out;
+}
+
+/**
+ * Build a `VersionObservation` for a single npm version. The
+ * `publishedAt` is the per-version upload time from the `time`
+ * field, or `null` if the package doesn't expose it.
+ */
+function npmVersionObservation(
+  version: string,
+  manifest: unknown,
+  publishedAt: string | null,
+): VersionObservation {
+  const m = manifest as
+    | {
+        dist?: { tarball?: string; shasum?: string };
+        deprecated?: string | boolean;
+        types?: string;
+        typings?: string;
+      }
+    | undefined;
+  return {
+    version,
+    publishedAt,
+    tarballUrl: m?.dist?.tarball ?? null,
+    shasum: m?.dist?.shasum ?? null,
+    deprecated:
+      m?.deprecated === true || typeof m?.deprecated === "string",
+    typesPath: m?.types ?? m?.typings ?? null,
+  };
+}
+
 export const npmAdapter: SourceAdapter = {
   source_type: "npm",
+
+  async backfill(source, ctx, deps, opts) {
+    // One HTTP request, same endpoint as the incremental poll. The
+    // npm full-doc body carries every version's manifest + a top-
+    // level `time` field with per-version upload timestamps.
+    const endpoint = pickPackageEndpoint(source);
+    const url = renderUrl(endpoint);
+    const res = await deps.fetch(url);
+    const body = await res.text();
+    if (!res.ok) {
+      throw new AdapterError(
+        "http_error",
+        `npm backfill fetch failed: ${res.status} for ${url}`,
+      );
+    }
+    const parsed = parseNpmResponse(body);
+
+    // Build VersionObservation[] for every version in the doc,
+    // sorted ascending by publishedAt (falling back to insertion
+    // order when `time` is missing).
+    const versionTimes = extractVersionTimes(parsed);
+    const versionKeys = Object.keys(parsed.versions ?? {});
+    const versionManifests = parsed.versions ?? {};
+    const observations: VersionObservation[] = versionKeys.map((v) =>
+      npmVersionObservation(v, versionManifests[v], versionTimes.get(v) ?? null),
+    );
+    // Sort: versions with publishedAt come first (ascending); versions
+    // without publishedAt fall to the end in insertion order.
+    observations.sort((a, b) => {
+      if (a.publishedAt === null && b.publishedAt === null) return 0;
+      if (a.publishedAt === null) return 1;
+      if (b.publishedAt === null) return -1;
+      return Date.parse(a.publishedAt) - Date.parse(b.publishedAt);
+    });
+
+    // Resolve latest the same way `resolveLatest` does (this is the
+    // state-seam requirement from ADR §2.4 — the host's incremental
+    // poll must compute the same finalState hash).
+    const { version: latestVersion } = resolveLatest(parsed);
+    const latestManifest = versionManifests[latestVersion];
+    const finalStateHash = sha256Hex(
+      JSON.stringify(canonicalizeJson(latestManifest ?? {})),
+    );
+
+    // Compute the plan with the three-rule model.
+    const planResult = computeBackfillPlan(observations, {
+      now: new Date(opts.now),
+      ...(opts.maxAgeMs !== undefined ? { maxAgeMs: opts.maxAgeMs } : {}),
+      ...(opts.recentWindowMs !== undefined
+        ? { recentWindowMs: opts.recentWindowMs }
+        : {}),
+      ...(opts.maxArtifacts !== undefined
+        ? { maxArtifacts: opts.maxArtifacts }
+        : {}),
+    });
+
+    // Build one NormalizedArtifact per plan event. Each artifact's
+    // `version` is the toVersion of the pair/hop; `raw_bytes` is
+    // the full doc body so P2 can re-parse the two endpoints
+    // independently; `content_hash` is the canonicalized hash of
+    // the toVersion's manifest — this is what an incremental poll
+    // of just that version would produce.
+    const artifacts = planResult.events.map((ev) => {
+      const toManifest = versionManifests[ev.toVersion] ?? {};
+      const hash = sha256Hex(
+        JSON.stringify(canonicalizeJson(toManifest)),
+      );
+      return {
+        source_id: source.id,
+        source_type: "npm" as const,
+        version: ev.toVersion,
+        content_hash: hash,
+        raw_bytes: body,
+        raw_content_type: "application/json",
+        detection_method: "version_bump" as const,
+        detected_at: ctx.now,
+        fetch_metadata: {
+          url,
+          status: res.status,
+          auth: source.fetch.auth,
+          contentType: "application/json",
+        },
+      };
+    });
+
+    const plan: BackfillResult["plan"] = {
+      events: planResult.events,
+      finalState: {
+        lastSeenVersion: latestVersion,
+        lastSeenHash: finalStateHash,
+      },
+      droppedObservations: planResult.droppedObservations,
+    };
+
+    return { artifacts, plan, observations };
+  },
 
   async fetch(source, ctx, deps) {
     const endpoint = pickPackageEndpoint(source);

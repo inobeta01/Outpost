@@ -131,6 +131,18 @@ function parseReleasesResponse(body: string): {
 export const githubReleasesAdapter: SourceAdapter = {
   source_type: "github_releases",
 
+  async backfill(source) {
+    // Step 5 of the backfill slice plan lands the full paginated,
+    // token-aware implementation. For now this signals to the host
+    // that the adapter is registered for backfill but not yet
+    // implemented — we throw the same `backfill_unsupported` code
+    // as `openapi` so the host treats it as a skip, not a failure.
+    throw new AdapterError(
+      "backfill_unsupported",
+      `github_releases backfill for ${source.id} lands in step 5 of the backfill slice plan`,
+    );
+  },
+
   async fetch(source, ctx, deps) {
     const endpoint = pickReleasesEndpoint(source);
     const url = renderUrl(endpoint);
