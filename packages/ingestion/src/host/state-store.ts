@@ -78,6 +78,13 @@ export type SourceState =
       readonly backfillRunId: string | null;
       /** ISO-8601 timestamp the backfill started. `null` until first run. */
       readonly backfillStartedAt: string | null;
+      /**
+       * Opaque adapter-specific resume marker (github_releases
+       * pagination page). Persisted when a backfill stops early —
+       * mid-pagination failure or budget hit — so the next run
+       * resumes instead of restarting. `null` when nothing to resume.
+       */
+      readonly backfillCheckpoint: string | null;
     }
   | {
       readonly source_id: string;
@@ -110,6 +117,7 @@ export function initialState(
       backfillStatus: null,
       backfillRunId: null,
       backfillStartedAt: null,
+      backfillCheckpoint: null,
     };
   }
   return {
@@ -186,6 +194,11 @@ function migrateState(value: SourceState): SourceState {
         typeof (value as { backfillStartedAt?: unknown }).backfillStartedAt ===
         "string"
           ? ((value as { backfillStartedAt: string }).backfillStartedAt)
+          : null,
+      backfillCheckpoint:
+        typeof (value as { backfillCheckpoint?: unknown }).backfillCheckpoint ===
+        "string"
+          ? ((value as { backfillCheckpoint: string }).backfillCheckpoint)
           : null,
     };
   }

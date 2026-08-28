@@ -171,6 +171,7 @@ export async function runStructuredSource(
     backfillStatus: prev.backfillStatus,
     backfillRunId: prev.backfillRunId,
     backfillStartedAt: prev.backfillStartedAt,
+    backfillCheckpoint: prev.backfillCheckpoint,
   };
   await state.write(next);
 

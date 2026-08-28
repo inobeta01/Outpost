@@ -169,6 +169,11 @@ export async function runStructuredBackfill(
   const backfillOpts: BackfillOptions = {
     now,
     ...(backfill ?? {}),
+    // Resume marker from a previous interrupted run (github
+    // pagination). Absent when null under exactOptionalPropertyTypes.
+    ...(prev.backfillCheckpoint !== null
+      ? { checkpoint: prev.backfillCheckpoint }
+      : {}),
   };
   let result: BackfillResult;
   try {
@@ -183,6 +188,7 @@ export async function runStructuredBackfill(
         backfillStatus: null,
         backfillRunId: null,
         backfillStartedAt: null,
+        backfillCheckpoint: null,
       });
       return {
         status: "backfill_skipped",
@@ -193,6 +199,17 @@ export async function runStructuredBackfill(
         planEventCount: 0,
         droppedObservationCount: 0,
       };
+    }
+    // Mid-pagination failure with a resume marker: persist the
+    // checkpoint so the next run picks up where this one died.
+    if (err instanceof AdapterError && err.checkpoint !== undefined) {
+      await state.write({
+        ...prev,
+        backfillStatus: "pending",
+        backfillRunId: runId,
+        backfillStartedAt: now,
+        backfillCheckpoint: err.checkpoint,
+      });
     }
     const code = err instanceof AdapterError ? err.code : "adapter_threw";
     return {
@@ -253,6 +270,8 @@ export async function runStructuredBackfill(
   }
 
   // 7. Atomic final write — last, only after every artifact pushed.
+  // A successful full-history backfill clears the checkpoint; one
+  // that stopped early on budget persists the resume marker.
   const finalState: SourceState = {
     source_id: source.id,
     kind: "structured",
@@ -263,6 +282,7 @@ export async function runStructuredBackfill(
     backfillStatus: "complete",
     backfillRunId: runId,
     backfillStartedAt: now,
+    backfillCheckpoint: result.checkpoint ?? null,
   };
   await state.write(finalState);
 

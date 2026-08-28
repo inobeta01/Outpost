@@ -195,11 +195,20 @@ export type AdapterErrorCode =
 export class AdapterError extends Error {
   public readonly code: AdapterErrorCode;
   public override readonly cause?: unknown;
-  constructor(code: AdapterErrorCode, message: string, cause?: unknown) {
+  /**
+   * Opaque resume marker for paginated backfills (github_releases).
+   * Set by an adapter that failed mid-pagination; the host loop
+   * persists it to state so the next run can resume from the saved
+   * page instead of restarting. `undefined` for non-checkpointed
+   * errors.
+   */
+  public readonly checkpoint?: string;
+  constructor(code: AdapterErrorCode, message: string, cause?: unknown, checkpoint?: string) {
     super(message);
     this.name = "AdapterError";
     this.code = code;
     this.cause = cause;
+    if (checkpoint !== undefined) this.checkpoint = checkpoint;
   }
 }
 
@@ -224,6 +233,11 @@ export interface BackfillOptions {
   readonly recentWindowMs?: number;
   /** Hard cap on total plan events. */
   readonly maxArtifacts?: number;
+  /**
+   * Opaque resume marker persisted by the host loop (github_releases
+   * pagination). `null`/absent = start from the beginning.
+   */
+  readonly checkpoint?: string | null;
 }
 
 /**
@@ -298,4 +312,11 @@ export interface BackfillResult {
   readonly plan: BackfillPlan;
   /** All observations considered, for the run report + diagnostics. */
   readonly observations: ReadonlyArray<VersionObservation>;
+  /**
+   * Opaque resume marker for paginated backfills. Present when the
+   * adapter stopped early with more history remaining (budget hit);
+   * the host loop persists it so a re-run can continue. `null` when
+   * the full history was consumed.
+   */
+  readonly checkpoint?: string | null;
 }

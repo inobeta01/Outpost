@@ -355,6 +355,109 @@ describe("structured-backfill host execution", () => {
     });
   });
 
+  it("persists a mid-pagination checkpoint and passes it to the next run", async () => {
+    // First run: adapter throws with a checkpoint → host persists
+    // pending + checkpoint.
+    let receivedCheckpoint: string | null | undefined = "not-called";
+    const checkpointedAdapter: SourceAdapter = {
+      source_type: "npm",
+      async fetch(): Promise<NormalizedArtifact> {
+        throw new Error("unused");
+      },
+      async backfill(_s, _c, _d, o): Promise<BackfillResult> {
+        receivedCheckpoint = o.checkpoint ?? null;
+        throw new AdapterError(
+          "http_error",
+          "page fetch failed: 403",
+          undefined,
+          JSON.stringify({ nextPage: 3 }),
+        );
+      },
+    };
+    await withStubAdapter("npm", checkpointedAdapter, async () => {
+      const state = new StateStore({ baseDir: "/state", fs: new MemFs() });
+      const p2 = new InMemoryP2Receiver();
+      const result = await runBackfill(state, p2);
+      assert.equal(result.status, "failed");
+      assert.equal(result.errorCode, "http_error");
+      const loaded = await state.read(source.id);
+      if (loaded && loaded.kind === "structured") {
+        assert.equal(loaded.backfillStatus, "pending");
+        assert.equal(loaded.backfillCheckpoint, JSON.stringify({ nextPage: 3 }));
+      }
+    });
+
+    // Second run: adapter sees the persisted checkpoint.
+    const resumeAdapter: SourceAdapter = {
+      source_type: "npm",
+      async fetch(): Promise<NormalizedArtifact> {
+        throw new Error("unused");
+      },
+      async backfill(_s, _c, _d, o): Promise<BackfillResult> {
+        receivedCheckpoint = o.checkpoint ?? null;
+        return {
+          artifacts: [normalizedArtifact("1.0.1")],
+          plan: {
+            events: [{ type: "backfill_pair", fromVersion: "1.0.0", toVersion: "1.0.1" }],
+            finalState: { lastSeenVersion: "1.0.1", lastSeenHash: "h" },
+            droppedObservations: [],
+          },
+          checkpoint: null,
+        };
+      },
+    };
+    await withStubAdapter("npm", resumeAdapter, async () => {
+      const fs = new MemFs();
+      seedState(fs, {
+        backfillStatus: "pending",
+        backfillRunId: "r_prev",
+        backfillStartedAt: "t_prev",
+        backfillCheckpoint: JSON.stringify({ nextPage: 3 }),
+      });
+      const state = new StateStore({ baseDir: "/state", fs });
+      const p2 = new InMemoryP2Receiver();
+      const result = await runBackfill(state, p2);
+      assert.equal(result.status, "success");
+      assert.equal(receivedCheckpoint, JSON.stringify({ nextPage: 3 }));
+      // A completed full-history run clears the checkpoint.
+      const loaded = await state.read(source.id);
+      if (loaded && loaded.kind === "structured") {
+        assert.equal(loaded.backfillStatus, "complete");
+        assert.equal(loaded.backfillCheckpoint, null);
+      }
+    });
+  });
+
+  it("persists the adapter's checkpoint when it stops early on budget", async () => {
+    const adapter: SourceAdapter = {
+      source_type: "npm",
+      async fetch(): Promise<NormalizedArtifact> {
+        throw new Error("unused");
+      },
+      async backfill(): Promise<BackfillResult> {
+        return {
+          artifacts: [normalizedArtifact("1.0.1")],
+          plan: {
+            events: [{ type: "backfill_pair", fromVersion: "1.0.0", toVersion: "1.0.1" }],
+            finalState: { lastSeenVersion: "1.0.1", lastSeenHash: "h" },
+            droppedObservations: [],
+          },
+          checkpoint: JSON.stringify({ nextPage: 2 }),
+        };
+      },
+    };
+    await withStubAdapter("npm", adapter, async () => {
+      const state = new StateStore({ baseDir: "/state", fs: new MemFs() });
+      const p2 = new InMemoryP2Receiver();
+      const result = await runBackfill(state, p2);
+      assert.equal(result.status, "success");
+      const loaded = await state.read(source.id);
+      if (loaded && loaded.kind === "structured") {
+        assert.equal(loaded.backfillCheckpoint, JSON.stringify({ nextPage: 2 }));
+      }
+    });
+  });
+
   it("state seam: an incremental poll after backfill sees the seeded version/hash", async () => {
     const adapter = backfillFixtureAdapter(TWO_PAIRS);
     await withStubAdapter("npm", adapter, async () => {
