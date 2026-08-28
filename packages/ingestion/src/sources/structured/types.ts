@@ -275,6 +275,19 @@ export interface BackfillPlan {
 }
 
 /**
+ * One entry in the backfill plan. The host loop uses this to
+ * populate the envelope's `backfill_event` and `backfill_range`
+ * fields per artifact.
+ */
+export interface BackfillPlanEvent {
+  readonly type: "backfill_pair" | "backfill_hop";
+  readonly fromVersion: string;
+  readonly toVersion: string;
+  /** Only set on hops: number of intermediate versions collapsed. */
+  readonly versionCount?: number;
+}
+
+/**
  * The result of a successful backfill call. The adapter returns
  * one `NormalizedArtifact` per plan event; the host loop converts
  * each into the unified `Artifact` envelope with the backfill

@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'no tests yet' && exit 0",
+    "test": "node --test --import tsx src/__tests__/*.test.ts",
     "lint": "echo 'lint not configured yet' && exit 0",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
@@ -20,6 +20,7 @@
     "@outpost/ingestion": "workspace:*"
   },
   "devDependencies": {
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0"
   }
 }

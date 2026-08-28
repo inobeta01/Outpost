@@ -64,6 +64,20 @@ export type SourceState =
       readonly lastSeenHash: string | null;
       readonly lastPolledAt: string;
       readonly pollCount: number;
+      /**
+       * Backfill lifecycle. `null` = never been backfilled;
+       * `"pending"` = a backfill run started but didn't complete
+       * (crash mid-run, P2 rejected, etc.); `"complete"` = backfill
+       * succeeded and finalState was written.
+       *
+       * The structured lane reads this to decide whether to skip a
+       * backfill call. The `--force` flag overrides `complete`.
+       */
+      readonly backfillStatus: BackfillStatus;
+      /** Resume marker — pagination checkpoint, run id, etc. Adapter-specific. */
+      readonly backfillRunId: string | null;
+      /** ISO-8601 timestamp the backfill started. `null` until first run. */
+      readonly backfillStartedAt: string | null;
     }
   | {
       readonly source_id: string;
@@ -73,6 +87,9 @@ export type SourceState =
       readonly lastPolledAt: string;
       readonly pollCount: number;
     };
+
+/** Backfill lifecycle states. See `SourceState.backfillStatus` for semantics. */
+export type BackfillStatus = "pending" | "complete" | null;
 
 /**
  * Initial state for a source. Used the first time we see a source.
@@ -90,6 +107,9 @@ export function initialState(
       lastSeenHash: null,
       lastPolledAt: now,
       pollCount: 0,
+      backfillStatus: null,
+      backfillRunId: null,
+      backfillStartedAt: null,
     };
   }
   return {
@@ -143,6 +163,35 @@ function isSourceState(value: unknown): value is SourceState {
   return typeof (v as { source_id?: unknown }).source_id === "string";
 }
 
+/**
+ * Migrate older state-file shapes forward. Adds the backfill fields
+ * (added in PR 4 Slice 2) as their null defaults when missing, so
+ * pre-PR-4 state files don't corrupt on first read.
+ */
+function migrateState(value: SourceState): SourceState {
+  if (value.kind === "structured") {
+    return {
+      ...value,
+      backfillStatus:
+        (value as { backfillStatus?: unknown }).backfillStatus === "pending" ||
+        (value as { backfillStatus?: unknown }).backfillStatus === "complete"
+          ? ((value as { backfillStatus: "pending" | "complete" })
+              .backfillStatus)
+          : null,
+      backfillRunId:
+        typeof (value as { backfillRunId?: unknown }).backfillRunId === "string"
+          ? ((value as { backfillRunId: string }).backfillRunId)
+          : null,
+      backfillStartedAt:
+        typeof (value as { backfillStartedAt?: unknown }).backfillStartedAt ===
+        "string"
+          ? ((value as { backfillStartedAt: string }).backfillStartedAt)
+          : null,
+    };
+  }
+  return value;
+}
+
 export class StateStore {
   private readonly fs: FsLike;
   private readonly baseDir: string;
@@ -183,7 +232,7 @@ export class StateStore {
           `delete the file to start fresh`,
       );
     }
-    return parsed.state;
+    return migrateState(parsed.state);
   }
 
   /** Write state for a source. Atomic: writes to .tmp then renames. */

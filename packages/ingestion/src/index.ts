@@ -99,8 +99,14 @@ export {
   type RunIngestionOptions,
   type RunReport,
   type PerSourceOutcome,
+  type BackfillSummary,
 } from "./host/orchestrator.js";
 export { runStructuredSource, type StructuredRunResult } from "./host/structured-lane.js";
+export {
+  runStructuredBackfill,
+  type StructuredBackfillResult,
+  type StructuredBackfillOptions,
+} from "./host/structured-backfill.js";
 export { runUnstructuredSource, type UnstructuredRunResult } from "./host/unstructured-lane.js";
 export { loadSources, type LoadedSource, type LoadFailure, type LoadReport } from "./host/source-loader.js";
 export {
@@ -110,6 +116,7 @@ export {
   type SourceState,
   type EntryState,
   type FsLike,
+  type BackfillStatus,
 } from "./host/state-store.js";
 export {
   InMemoryP2Receiver,
@@ -117,3 +124,21 @@ export {
   type P2Receiver,
   type P2PushResult,
 } from "./host/p2-receiver.js";
+
+// --- Backfill plan module (PR 4 Slice 1) ---
+export {
+  computeBackfillPlan,
+  DEFAULT_MAX_AGE_MS,
+  DEFAULT_RECENT_WINDOW_MS,
+  DEFAULT_MAX_ARTIFACTS,
+  type BackfillPlanEvent,
+  type BackfillPlan,
+  type BackfillPlanOptions,
+} from "./sources/structured/backfill-plan.js";
+
+// --- Backfill contract types (PR 4 Slice 1) ---
+export {
+  type BackfillOptions,
+  type BackfillResult,
+  type VersionObservation,
+} from "./sources/structured/types.js";

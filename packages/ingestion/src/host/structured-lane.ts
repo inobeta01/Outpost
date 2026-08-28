@@ -157,7 +157,10 @@ export async function runStructuredSource(
     };
   }
 
-  // 6. Persist new state.
+  // 6. Persist new state. Preserve backfill fields from prev — an
+  // incremental poll must not clobber a previously-completed
+  // backfill, and a pending backfill should stay pending so the
+  // next run can resume.
   const next: SourceState = {
     source_id: source.id,
     kind: "structured",
@@ -165,6 +168,9 @@ export async function runStructuredSource(
     lastSeenHash: raw.content_hash,
     lastPolledAt: now,
     pollCount: prev.pollCount + 1,
+    backfillStatus: prev.backfillStatus,
+    backfillRunId: prev.backfillRunId,
+    backfillStartedAt: prev.backfillStartedAt,
   };
   await state.write(next);
 

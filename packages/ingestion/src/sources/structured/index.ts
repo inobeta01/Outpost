@@ -22,6 +22,11 @@ export {
   type AdapterContext,
   type FetchMetadata,
   type AdapterErrorCode,
+  type BackfillOptions,
+  type BackfillPlan,
+  type BackfillPlanEvent,
+  type BackfillResult,
+  type VersionObservation,
 } from "./types.js";
 
 export {
