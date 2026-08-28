@@ -266,6 +266,7 @@ export async function runUnstructuredSource(
         httpStatus: null,
         fetchedAt: payload.fetchTimestamp,
       },
+      fetch_mode: "incremental",
     };
 
     let pushResult;

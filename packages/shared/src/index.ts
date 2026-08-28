@@ -46,7 +46,10 @@ export { SourceSpecValidationError } from "./validate.js";
 
 export type {
   Artifact,
+  BackfillEventType,
+  BackfillRange,
   DetectionMethod,
   DerivedAnchorEnvelope,
+  FetchMode,
   FetchProvenance,
 } from "./artifact.js";

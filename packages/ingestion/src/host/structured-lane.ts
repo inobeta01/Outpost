@@ -133,6 +133,7 @@ export async function runStructuredSource(
       httpStatus: raw.fetch_metadata.status,
       fetchedAt: raw.detected_at,
     },
+    fetch_mode: "incremental",
   };
 
   // 5. Push to P2.

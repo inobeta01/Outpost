@@ -54,6 +54,51 @@ export type DetectionMethod =
   | "first_poll";
 
 /**
+ * How the artifact was gathered. Per ADR §3.2: distinct from
+ * `detection_method` because it describes *how the data was fetched*,
+ * not *what kind of change this represents*. Both fields are needed
+ * downstream — a `first_poll` artifact can be a backfill event,
+ * a `version_bump` artifact can be incremental.
+ *
+ *   - `incremental` — the normal polling path (latest-only endpoint,
+ *     one artifact per poll).
+ *   - `backfill`   — first-time-onboarding history capture. The
+ *     adapter enumerated multiple versions and emitted one artifact
+ *     per consecutive pair (or per collapsed range hop); see
+ *     `backfill_event` for which.
+ */
+export type FetchMode = "incremental" | "backfill";
+
+/**
+ * Discriminator on backfill artifacts. Per the backfill slice plan
+ * (vault: "Backfill Slice — Structured Lane Plan"):
+ *
+ *   - `backfill_pair` — one consecutive-version artifact; the recent
+ *     window's full granularity. Carries `{ from, to, confidence: "high" }`
+ *     in `backfill_range`.
+ *   - `backfill_hop`  — one collapsed-range artifact; older versions
+ *     grouped to fit the `max_artifacts` budget. Carries `{ from, to,
+ *     version_count, confidence: "low" }` in `backfill_range`.
+ *
+ * Only present when `fetch_mode === "backfill"`. The unstructured
+ * lane does not emit backfill artifacts in v1.
+ */
+export type BackfillEventType = "backfill_pair" | "backfill_hop";
+
+/**
+ * Range metadata for a backfill artifact. Only present when
+ * `fetch_mode === "backfill"`. `version_count` is only set on
+ * `backfill_hop` artifacts (the number of intermediate versions
+ * collapsed into the single hop).
+ */
+export interface BackfillRange {
+  readonly from: string;
+  readonly to: string;
+  readonly version_count?: number;
+  readonly confidence: "high" | "low";
+}
+
+/**
  * A typed anchor. Carries the deterministic version/date identifier
  * for an unstructured entry alongside the mechanism that produced
  * it (ADR §10.4 — feeds forward into P2.4's per-mechanism
@@ -164,4 +209,23 @@ export interface Artifact {
   readonly detected_at: string;
   /** Per-fetch provenance. */
   readonly fetch_provenance: FetchProvenance;
+  /**
+   * How the artifact was gathered. Always set; defaults to
+   * `"incremental"` for the normal polling path, `"backfill"`
+   * only when the host loop's backfill mode produced it.
+   * Per the backfill slice plan, this is **distinct from**
+   * `detection_method` — see `FetchMode` doc comment.
+   */
+  readonly fetch_mode: FetchMode;
+  /**
+   * Backfill event discriminator. Only present when
+   * `fetch_mode === "backfill"`; absent for incremental artifacts.
+   */
+  readonly backfill_event?: BackfillEventType;
+  /**
+   * Backfill range metadata. Only present when
+   * `fetch_mode === "backfill"`; carries the from/to version pair
+   * (and `version_count` for collapsed hops).
+   */
+  readonly backfill_range?: BackfillRange;
 }
