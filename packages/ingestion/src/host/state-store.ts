@@ -53,6 +53,23 @@ export interface EntryState {
 }
 
 /**
+ * Per-version enrichment state. Tracks the last-seen content hash
+ * for each version's enrichment entry, so the host loop can detect
+ * edits and avoid re-fetching unchanged content.
+ *
+ * See [[Version-Join Architecture — Unstructured Enrichment Driven
+ * by Structured Lane]] for the design.
+ */
+export interface EnrichmentState {
+  /** The structured adapter's reported version (e.g. "2.32.4"). */
+  readonly version: string;
+  /** Content hash from the last successful enrichment fetch. `null` if not yet fetched. */
+  readonly contentHash: string | null;
+  /** When this enrichment was last seen (ISO-8601). `null` if not yet fetched. */
+  readonly lastSeenAt: string | null;
+}
+
+/**
  * Per-source state. The discriminated union narrows per lane.
  * Adding a new field requires updating the JSON parser below.
  */
@@ -85,6 +102,25 @@ export type SourceState =
        * resumes instead of restarting. `null` when nothing to resume.
        */
       readonly backfillCheckpoint: string | null;
+      /**
+       * Per-version enrichment state (version-join). Empty for
+       * sources without an `enrichment` block in the spec. Populated
+       * as enrichment artifacts are produced.
+       */
+      readonly enrichments: ReadonlyArray<EnrichmentState>;
+      /**
+       * Versions whose enrichment fetch failed transiently (network
+       * blip, 5xx). The next poll re-fetches these before looking up
+       * new versions. `null` when no pending retries.
+       */
+      readonly pendingEnrichments: ReadonlyArray<string>;
+      /**
+       * ISO-8601 timestamp the last enrichment poll ran. `null` if
+       * the source has no enrichment block or has never been polled
+       * for enrichment. Used for staleness detection and for the
+       * "re-fetch last K versions" logic.
+       */
+      readonly enrichmentLastRunAt: string | null;
     }
   | {
       readonly source_id: string;
@@ -118,6 +154,9 @@ export function initialState(
       backfillRunId: null,
       backfillStartedAt: null,
       backfillCheckpoint: null,
+      enrichments: [],
+      pendingEnrichments: [],
+      enrichmentLastRunAt: null,
     };
   }
   return {
@@ -173,32 +212,42 @@ function isSourceState(value: unknown): value is SourceState {
 
 /**
  * Migrate older state-file shapes forward. Adds the backfill fields
- * (added in PR 4 Slice 2) as their null defaults when missing, so
- * pre-PR-4 state files don't corrupt on first read.
+ * (added in PR 4 Slice 2) and the enrichment fields (added in the
+ * version-join slice) as their null/empty defaults when missing, so
+ * pre-existing state files don't corrupt on first read.
  */
 function migrateState(value: SourceState): SourceState {
   if (value.kind === "structured") {
+    const v = value as {
+      backfillStatus?: unknown;
+      backfillRunId?: unknown;
+      backfillStartedAt?: unknown;
+      backfillCheckpoint?: unknown;
+      enrichments?: unknown;
+      pendingEnrichments?: unknown;
+      enrichmentLastRunAt?: unknown;
+    };
     return {
       ...value,
       backfillStatus:
-        (value as { backfillStatus?: unknown }).backfillStatus === "pending" ||
-        (value as { backfillStatus?: unknown }).backfillStatus === "complete"
-          ? ((value as { backfillStatus: "pending" | "complete" })
-              .backfillStatus)
+        v.backfillStatus === "pending" || v.backfillStatus === "complete"
+          ? (v.backfillStatus as "pending" | "complete")
           : null,
       backfillRunId:
-        typeof (value as { backfillRunId?: unknown }).backfillRunId === "string"
-          ? ((value as { backfillRunId: string }).backfillRunId)
-          : null,
+        typeof v.backfillRunId === "string" ? v.backfillRunId : null,
       backfillStartedAt:
-        typeof (value as { backfillStartedAt?: unknown }).backfillStartedAt ===
-        "string"
-          ? ((value as { backfillStartedAt: string }).backfillStartedAt)
-          : null,
+        typeof v.backfillStartedAt === "string" ? v.backfillStartedAt : null,
       backfillCheckpoint:
-        typeof (value as { backfillCheckpoint?: unknown }).backfillCheckpoint ===
-        "string"
-          ? ((value as { backfillCheckpoint: string }).backfillCheckpoint)
+        typeof v.backfillCheckpoint === "string" ? v.backfillCheckpoint : null,
+      enrichments: Array.isArray(v.enrichments)
+        ? (v.enrichments as ReadonlyArray<EnrichmentState>)
+        : [],
+      pendingEnrichments: Array.isArray(v.pendingEnrichments)
+        ? (v.pendingEnrichments as ReadonlyArray<string>)
+        : [],
+      enrichmentLastRunAt:
+        typeof v.enrichmentLastRunAt === "string"
+          ? v.enrichmentLastRunAt
           : null,
     };
   }

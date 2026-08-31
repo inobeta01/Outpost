@@ -78,14 +78,6 @@ export type ExtractionStrategy =
   | "raw_file"
   | "rss";
 
-/** Per ADR §10.2, where the version/date identifier for an entry comes from. */
-export type AnchorSource =
-  | "url_slug"
-  | "heading"
-  | "inline_regex"
-  | "feed_field"
-  | "none";
-
 /**
  * Per-strategy config blocks. Exactly one applies, chosen by
  * `extraction_strategy`. The schema's `oneOf` enforces this at
@@ -124,6 +116,70 @@ export type StrategyConfig =
   | StrategyConfigPaginatedIndex
   | StrategyConfigRawFile
   | StrategyConfigRss;
+
+/**
+ * Per ADR §10.2, where the version/date identifier for an entry comes from.
+ *
+ * For enrichment sources, the same enum is used: the enrichment entry's
+ * anchor (URL slug, heading, etc.) is matched against the structured
+ * adapter's reported version to do the version-join.
+ */
+export type AnchorSource =
+  | "url_slug"
+  | "heading"
+  | "inline_regex"
+  | "feed_field"
+  | "none";
+
+/**
+ * Optional enrichment for a structured source. The structured adapter
+ * reports a version (e.g. `2.32.4`); the enrichment block tells the
+ * host how to find the human-readable entry (changelog post, blog,
+ * release notes) for that version.
+ *
+ * The enrichment is keyed by `version` (the same string the structured
+ * adapter reports), using the strategy's existing anchor mechanism.
+ * No new URL template is required — the strategy's `resolveItems`
+ * discovers URLs, and the anchor mechanism matches them to versions.
+ *
+ * v1 caveats:
+ *   - Strategies `single_page` and `raw_file` don't have per-entry
+ *     resolution, so the enrichment block is rejected at validation
+ *     time for these strategies.
+ *   - The 404 case (no entry for this version) is silent skip.
+ *   - Transient failures retry on the next poll.
+ */
+export interface EnrichmentConfig {
+  /** Which extraction strategy to use for the enrichment feed. */
+  readonly strategy: ExtractionStrategy;
+  /** Per-strategy config — same shape as `UnstructuredSource.strategy_config`. */
+  readonly strategy_config?: StrategyConfig;
+  /**
+   * URL of the enrichment feed (index URL, RSS URL, or file URL).
+   * The strategy interprets this according to its `strategy` value.
+   */
+  readonly endpoint_url: string;
+  /**
+   * How the version is extracted from each entry. Same enum as
+   * `UnstructuredSource.anchor_source`. The extracted value is
+   * normalized (dashes → dots) and matched against the structured
+   * adapter's reported version.
+   */
+  readonly anchor_source: AnchorSource;
+  /** Regex with at least one capture group. Required for url_slug/heading/inline_regex. */
+  readonly anchor_pattern?: string;
+  /**
+   * Per ADR §9.6 — if the enrichment's content has not changed in this
+   * many days, emit a warning. Defaults to 90. Never halts polling.
+   */
+  readonly staleness_sentinel?: StalenessSentinel;
+  /**
+   * Optional auth for the enrichment endpoint. Defaults to "none".
+   * Today the structured side passes its own auth through; the
+   * enrichment uses this separate config.
+   */
+  readonly auth?: "none" | "generic_bearer_env";
+}
 
 /**
  * Unstructured (prose) source. `fetch.url` is the page (or file/feed)
@@ -170,6 +226,12 @@ export interface UnstructuredSource {
  * Structured (machine-readable) source. One or more typed endpoints
  * (OpenAPI, npm, PyPI, GitHub releases) declared under `endpoints`.
  * No LLM, no Firecrawl — symbolic diff path.
+ *
+ * The optional `enrichment` block enables the version-join: the
+ * structured adapter detects "version V shipped"; the enrichment
+ * side fetches the human-readable entry (changelog post, blog, etc.)
+ * for that version. Both are emitted as separate artifacts and joined
+ * at P2 query time by `version`.
  */
 export interface StructuredSource {
   readonly id: string;
@@ -180,6 +242,11 @@ export interface StructuredSource {
   readonly endpoints: Readonly<Record<string, Endpoint>>;
   readonly security: SecurityConfig;
   readonly firecrawl: false;
+  /**
+   * Optional enrichment. See [[Version-Join Architecture — Unstructured
+   * Enrichment Driven by Structured Lane]] for the design.
+   */
+  readonly enrichment?: EnrichmentConfig;
 }
 
 /** Discriminated union. Narrow with `source.kind === "structured"`. */

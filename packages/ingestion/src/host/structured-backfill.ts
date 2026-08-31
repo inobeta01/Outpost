@@ -281,6 +281,8 @@ export async function runStructuredBackfill(
   // 7. Atomic final write — last, only after every artifact pushed.
   // A successful full-history backfill clears the checkpoint; one
   // that stopped early on budget persists the resume marker.
+  // Enrichment fields are preserved (the backfill pass doesn't
+  // change them — the enrichment lane runs on its own schedule).
   const finalState: SourceState = {
     source_id: source.id,
     kind: "structured",
@@ -292,6 +294,9 @@ export async function runStructuredBackfill(
     backfillRunId: runId,
     backfillStartedAt: now,
     backfillCheckpoint: result.checkpoint ?? null,
+    enrichments: prev.enrichments,
+    pendingEnrichments: prev.pendingEnrichments,
+    enrichmentLastRunAt: prev.enrichmentLastRunAt,
   };
   await state.write(finalState);
 

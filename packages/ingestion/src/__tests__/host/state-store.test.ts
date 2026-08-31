@@ -95,3 +95,88 @@ describe("StateStore", () => {
     );
   });
 });
+
+describe("initialState (structured, version-join fields)", () => {
+  it("initializes enrichments, pendingEnrichments, enrichmentLastRunAt as empty/null", () => {
+    const s = initialState("pypi/requests", "structured", "2026-08-25T12:00:00.000Z");
+    if (s.kind !== "structured") throw new Error("expected structured");
+    assert.deepEqual(s.enrichments, []);
+    assert.deepEqual(s.pendingEnrichments, []);
+    assert.equal(s.enrichmentLastRunAt, null);
+  });
+});
+
+describe("migrateState (version-join fields)", () => {
+  it("fills missing enrichments with [] for pre-existing state files", async () => {
+    const fs = new MemFs();
+    const store = new StateStore({ baseDir: "/state", fs });
+    // Write a state file without the enrichment fields, simulating
+    // a pre-version-join state file.
+    fs.files.set(
+      "/state/pypi_requests.json",
+      JSON.stringify({
+        version: 1,
+        state: {
+          source_id: "pypi/requests",
+          kind: "structured",
+          lastSeenVersion: "2.32.3",
+          lastSeenHash: "abc",
+          lastPolledAt: "2026-08-25T12:00:00.000Z",
+          pollCount: 5,
+          backfillStatus: "complete",
+          backfillRunId: "r1",
+          backfillStartedAt: "2026-08-20T00:00:00.000Z",
+          backfillCheckpoint: null,
+        },
+      }),
+    );
+    const got = await store.read("pypi/requests");
+    assert.ok(got);
+    if (got && got.kind === "structured") {
+      assert.deepEqual(got.enrichments, []);
+      assert.deepEqual(got.pendingEnrichments, []);
+      assert.equal(got.enrichmentLastRunAt, null);
+      // Existing fields preserved.
+      assert.equal(got.lastSeenVersion, "2.32.3");
+      assert.equal(got.backfillStatus, "complete");
+      assert.equal(got.pollCount, 5);
+    }
+  });
+
+  it("preserves existing enrichment fields when present", async () => {
+    const fs = new MemFs();
+    const store = new StateStore({ baseDir: "/state", fs });
+    fs.files.set(
+      "/state/pypi_requests.json",
+      JSON.stringify({
+        version: 1,
+        state: {
+          source_id: "pypi/requests",
+          kind: "structured",
+          lastSeenVersion: "2.32.3",
+          lastSeenHash: "abc",
+          lastPolledAt: "2026-08-25T12:00:00.000Z",
+          pollCount: 5,
+          backfillStatus: "complete",
+          backfillRunId: "r1",
+          backfillStartedAt: "2026-08-20T00:00:00.000Z",
+          backfillCheckpoint: null,
+          enrichments: [
+            { version: "2.32.3", contentHash: "h1", lastSeenAt: "2026-08-25T12:00:00.000Z" },
+          ],
+          pendingEnrichments: ["2.32.4"],
+          enrichmentLastRunAt: "2026-08-25T12:00:00.000Z",
+        },
+      }),
+    );
+    const got = await store.read("pypi/requests");
+    assert.ok(got);
+    if (got && got.kind === "structured") {
+      assert.equal(got.enrichments.length, 1);
+      assert.equal(got.enrichments[0]?.version, "2.32.3");
+      assert.equal(got.enrichments[0]?.contentHash, "h1");
+      assert.deepEqual(got.pendingEnrichments, ["2.32.4"]);
+      assert.equal(got.enrichmentLastRunAt, "2026-08-25T12:00:00.000Z");
+    }
+  });
+});

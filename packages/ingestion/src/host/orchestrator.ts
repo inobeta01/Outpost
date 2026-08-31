@@ -41,6 +41,7 @@ import type { ScrapeClient } from "../sources/unstructured/strategy-registry.js"
 
 import { runStructuredSource, type StructuredRunResult } from "./structured-lane.js";
 import { runStructuredBackfill, type StructuredBackfillResult } from "./structured-backfill.js";
+import { runEnrichment, type EnrichmentRunResult } from "./enrichment-lane.js";
 import { runUnstructuredSource, type UnstructuredRunResult } from "./unstructured-lane.js";
 import { InMemoryP2Receiver, type P2Receiver } from "./p2-receiver.js";
 import { StateStore, type FsLike } from "./state-store.js";
@@ -49,7 +50,8 @@ import { loadSources, type LoadedSource, type LoadFailure } from "./source-loade
 export type PerSourceOutcome =
   | { readonly kind: "structured"; readonly file: string; readonly result: StructuredRunResult }
   | { readonly kind: "unstructured"; readonly file: string; readonly result: UnstructuredRunResult }
-  | { readonly kind: "structured_backfill"; readonly file: string; readonly result: StructuredBackfillResult };
+  | { readonly kind: "structured_backfill"; readonly file: string; readonly result: StructuredBackfillResult }
+  | { readonly kind: "structured_enrichment"; readonly file: string; readonly result: EnrichmentRunResult };
 
 export interface BackfillSummary {
   readonly sourcesBackfilled: number;
@@ -164,8 +166,8 @@ export async function runIngestion(opts: RunIngestionOptions): Promise<RunReport
 
   const outcomes: PerSourceOutcome[] = [];
   for (const src of queue) {
-    const outcome = await dispatchOne(src, { ...opts, p2, state, mode });
-    outcomes.push(outcome);
+    const sourceOutcomes = await dispatchOne(src, { ...opts, p2, state, mode });
+    outcomes.push(...sourceOutcomes);
   }
 
   const finishedAt = new Date().toISOString();
@@ -245,7 +247,7 @@ async function dispatchOne(
     state: StateStore;
     mode: "incremental" | "backfill";
   },
-): Promise<PerSourceOutcome> {
+): Promise<PerSourceOutcome[]> {
   const spec: SourceSpec = src.spec;
 
   if (opts.mode === "backfill") {
@@ -263,11 +265,13 @@ async function dispatchOne(
         droppedObservationCount: 0,
         warnings: [],
       };
-      return {
-        kind: "structured_backfill",
-        file: src.file,
-        result: skippedResult,
-      };
+      return [
+        {
+          kind: "structured_backfill",
+          file: src.file,
+          result: skippedResult,
+        },
+      ];
     }
     if (isStructured(spec)) {
       const result = await runStructuredBackfill({
@@ -283,7 +287,7 @@ async function dispatchOne(
           ? { force: opts.backfillForce }
           : {}),
       });
-      return { kind: "structured_backfill", file: src.file, result };
+      return [{ kind: "structured_backfill", file: src.file, result }];
     }
     throw new Error(`unknown source kind for ${src.file}`);
   }
@@ -297,7 +301,31 @@ async function dispatchOne(
       state: opts.state,
       p2: opts.p2,
     });
-    return { kind: "structured", file: src.file, result };
+    const outcomes: PerSourceOutcome[] = [
+      { kind: "structured", file: src.file, result },
+    ];
+    // Run the enrichment lane (version-join) for sources that
+    // declared an `enrichment` block. The enrichment is a side
+    // effect of the structured detection: every poll, we re-fetch
+    // the last K versions of enrichment to detect edits, plus
+    // any pendingEnrichments from a previous transient failure.
+    // If the structured source failed, skip enrichment (no point
+    // looking up versions that we don't know about).
+    if (spec.enrichment !== undefined && result.status !== "failed") {
+      const enrichmentResult = await runEnrichment({
+        source: spec,
+        now: opts.now,
+        deps: opts.deps,
+        state: opts.state,
+        p2: opts.p2,
+      });
+      outcomes.push({
+        kind: "structured_enrichment",
+        file: src.file,
+        result: enrichmentResult,
+      });
+    }
+    return outcomes;
   }
   if (isUnstructured(spec)) {
     const result = await runUnstructuredSource({
@@ -307,7 +335,7 @@ async function dispatchOne(
       state: opts.state,
       p2: opts.p2,
     });
-    return { kind: "unstructured", file: src.file, result };
+    return [{ kind: "unstructured", file: src.file, result }];
   }
   throw new Error(`unknown source kind for ${src.file}`);
 }

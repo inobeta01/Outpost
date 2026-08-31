@@ -78,8 +78,24 @@ function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
  */
 export async function validateSourceSpec(input: unknown): Promise<SourceSpec> {
   const validate = await loadValidator();
-  if (validate(input)) {
-    return input as SourceSpec;
+  if (!validate(input)) {
+    throw new SourceSpecValidationError(formatErrors(validate.errors));
   }
-  throw new SourceSpecValidationError(formatErrors(validate.errors));
+  const spec = input as SourceSpec;
+  // Post-validation cross-field check: enrichment strategies must
+  // support per-entry resolution. `single_page` and `raw_file` don't
+  // have per-entry anchors, so they can't do per-version enrichment.
+  // The JSON Schema's enum allows them (the strategy machinery exists),
+  // but the version-join pattern needs per-entry URLs/anchors. Reject
+  // explicitly with a clear message rather than letting the runtime
+  // fail with a confusing anchor error.
+  if (spec.kind === "structured" && spec.enrichment !== undefined) {
+    const e = spec.enrichment;
+    if (e.strategy === "single_page" || e.strategy === "raw_file") {
+      throw new SourceSpecValidationError([
+        `/enrichment enrichment.strategy=${e.strategy} is not supported for the version-join pattern: it has no per-entry resolution. Use index_then_detail, paginated_index, or rss.`,
+      ]);
+    }
+  }
+  return spec;
 }

@@ -160,7 +160,9 @@ export async function runStructuredSource(
   // 6. Persist new state. Preserve backfill fields from prev — an
   // incremental poll must not clobber a previously-completed
   // backfill, and a pending backfill should stay pending so the
-  // next run can resume.
+  // next run can resume. Enrichment fields are also preserved —
+  // the structured incremental poll doesn't touch them; that's the
+  // enrichment lane's job.
   const next: SourceState = {
     source_id: source.id,
     kind: "structured",
@@ -172,6 +174,9 @@ export async function runStructuredSource(
     backfillRunId: prev.backfillRunId,
     backfillStartedAt: prev.backfillStartedAt,
     backfillCheckpoint: prev.backfillCheckpoint,
+    enrichments: prev.enrichments,
+    pendingEnrichments: prev.pendingEnrichments,
+    enrichmentLastRunAt: prev.enrichmentLastRunAt,
   };
   await state.write(next);
 

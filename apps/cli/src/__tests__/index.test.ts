@@ -99,4 +99,35 @@ describe("parseArgs", () => {
   it("parses -h as help", () => {
     assert.equal(parseArgs(["-h"]).help, true);
   });
+
+  it("recognizes the enrich subcommand with --all", () => {
+    const args = parseArgs(["enrich", "--source", "pypi/requests", "--all"]);
+    assert.equal(args.command, "enrich");
+    assert.equal(args.enrichSource, "pypi/requests");
+    assert.equal(args.enrichAll, true);
+    assert.deepEqual(args.enrichVersions, []);
+  });
+
+  it("recognizes the enrich subcommand with --version (repeatable)", () => {
+    const args = parseArgs([
+      "enrich",
+      "--source",
+      "pypi/requests",
+      "--version",
+      "2.32.3",
+      "--version",
+      "2.32.4",
+    ]);
+    assert.equal(args.command, "enrich");
+    assert.equal(args.enrichSource, "pypi/requests");
+    assert.equal(args.enrichAll, false);
+    assert.deepEqual(args.enrichVersions, ["2.32.3", "2.32.4"]);
+  });
+
+  it("enrich mode defaults to no versions and not --all", () => {
+    const args = parseArgs(["enrich", "--source", "pypi/requests"]);
+    assert.equal(args.command, "enrich");
+    assert.equal(args.enrichAll, false);
+    assert.deepEqual(args.enrichVersions, []);
+  });
 });

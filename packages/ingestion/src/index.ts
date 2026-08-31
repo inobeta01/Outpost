@@ -108,6 +108,7 @@ export {
   type StructuredBackfillOptions,
 } from "./host/structured-backfill.js";
 export { runUnstructuredSource, type UnstructuredRunResult } from "./host/unstructured-lane.js";
+export { runEnrichment, type EnrichmentRunResult, type EnrichmentRunOptions } from "./host/enrichment-lane.js";
 export { loadSources, type LoadedSource, type LoadFailure, type LoadReport } from "./host/source-loader.js";
 export {
   StateStore,

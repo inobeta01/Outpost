@@ -49,7 +49,8 @@
           "description": "Map of named endpoint → fetch definition. Structured sources have one or more typed endpoints; the adapter picks the right one at runtime."
         },
         "security": { "$ref": "#/$defs/security" },
-        "firecrawl": { "const": false }
+        "firecrawl": { "const": false },
+        "enrichment": { "$ref": "#/$defs/enrichmentConfig" }
       }
     },
     "unstructuredSource": {
@@ -270,6 +271,61 @@
           "type": "object",
           "additionalProperties": { "type": "string", "minLength": 1 },
           "description": "Variable bindings for the `url` template. Required when the URL contains `{var}` placeholders."
+        }
+      }
+    },
+    "enrichmentConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "endpoint_url", "anchor_source"],
+      "description": "Optional enrichment for a structured source. The structured adapter reports a version; the enrichment side fetches the human-readable entry (changelog post, blog, release notes) for that version. See [[Version-Join Architecture — Unstructured Enrichment Driven by Structured Lane]] for the design.",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["single_page", "index_then_detail", "paginated_index", "raw_file", "rss"],
+          "description": "Extraction strategy for the enrichment feed. v1: `single_page` and `raw_file` are rejected at validation time because they don't have per-entry resolution; use one of the other three."
+        },
+        "strategy_config": {
+          "type": "object",
+          "description": "Per-strategy config — same shape as the unstructured source's `strategy_config`. Required fields depend on the strategy value.",
+          "oneOf": [
+            { "$ref": "#/$defs/strategySinglePage" },
+            { "$ref": "#/$defs/strategyIndexThenDetail" },
+            { "$ref": "#/$defs/strategyPaginatedIndex" },
+            { "$ref": "#/$defs/strategyRawFile" },
+            { "$ref": "#/$defs/strategyRss" }
+          ]
+        },
+        "endpoint_url": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "URL of the enrichment feed. For `index_then_detail` and `paginated_index` this is the index page; for `rss` this is the feed URL; for `single_page` and `raw_file` this is the file/page URL."
+        },
+        "anchor_source": {
+          "type": "string",
+          "enum": ["url_slug", "heading", "inline_regex", "feed_field", "none"],
+          "description": "How the version is extracted from each enrichment entry. The extracted value is normalized (dashes → dots) and matched against the structured adapter's reported version."
+        },
+        "anchor_pattern": {
+          "type": "string",
+          "description": "Regex with at least one capture group, paired with `anchor_source`. Required for `url_slug`/`heading`/`inline_regex`; not allowed for `feed_field` or `none`."
+        },
+        "staleness_sentinel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_inactivity_days": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 90
+            }
+          }
+        },
+        "auth": {
+          "type": "string",
+          "enum": ["none", "generic_bearer_env"],
+          "default": "none",
+          "description": "Auth mode for the enrichment endpoint. Defaults to \"none\"."
         }
       }
     }

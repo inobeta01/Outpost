@@ -21,6 +21,7 @@ export type {
   AnchorSource,
   Endpoint,
   EndpointKind,
+  EnrichmentConfig,
   ExtractionStrategy,
   FetchAuth,
   FetchConfig,

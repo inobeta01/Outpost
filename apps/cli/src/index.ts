@@ -2,7 +2,7 @@
 /**
  * @outpost/cli
  *
- * Operator CLI. Two subcommands:
+ * Operator CLI. Three subcommands:
  *
  *   outpost (default)        — run the incremental host loop once.
  *   outpost backfill --source <id>
@@ -10,8 +10,13 @@
  *                              named source (or every loaded
  *                              structured source if --source is
  *                              omitted). PR 4 Slice 2.
+ *   outpost enrich --source <id> [--all | --version <V> ...]
+ *                            — fetch enrichment for specific
+ *                              versions (or all known versions).
+ *                              PR 4 Slice 2 (version-join).
  *
- * Both modes print a JSON RunReport to stdout. Exit codes:
+ * All modes print a JSON RunReport (or EnrichReport) to stdout.
+ * Exit codes:
  *
  *   0 — success (every source either succeeded or was skipped)
  *   1 — at least one source failed or was skipped-with-failure
@@ -30,9 +35,12 @@
  */
 
 import { pathToFileURL } from "node:url";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-import { runIngestion } from "@outpost/ingestion";
+import { runIngestion, runEnrichment, StateStore, InMemoryP2Receiver } from "@outpost/ingestion";
 import type { ScrapeClient } from "@outpost/ingestion";
+import { isStructured, validateSourceSpec } from "@outpost/shared";
 
 const HELP = `outpost — operator CLI
 
@@ -41,6 +49,8 @@ Usage:
   outpost backfill [--source <id>] [--sources <dir>] [--state <dir>]
                    [--max-age <duration>] [--recent-window <duration>]
                    [--max-artifacts <n>] [--force]
+  outpost enrich --source <id> [--all | --version <V> ...]
+                 [--sources <dir>] [--state <dir>]
 
 Runs the host loop once and prints a JSON RunReport.
 Default --sources: ./sources
@@ -63,6 +73,12 @@ Backfill mode (one-time onboarding):
                     Default 35.
   --force           Re-run backfill even when \`backfillStatus\`
                     is already "complete".
+
+Enrich mode (version-join):
+  --source <id>     Required. Run enrichment for this source id.
+  --all             Look up enrichment for every known version in state.
+  --version <V>     Look up enrichment for this specific version (repeatable).
+                    At least one of --all or --version is required.
 `;
 
 interface ParsedDuration {
@@ -73,8 +89,11 @@ interface Args {
   sources: string;
   state: string;
   help: boolean;
-  command: "incremental" | "backfill";
+  command: "incremental" | "backfill" | "enrich";
   backfillSource?: string;
+  enrichSource?: string;
+  enrichAll: boolean;
+  enrichVersions: string[];
   maxAge?: ParsedDuration;
   recentWindow?: ParsedDuration;
   maxArtifacts?: number;
@@ -117,11 +136,14 @@ export function parseArgs(argv: ReadonlyArray<string>): Args {
     help: false,
     command: "incremental",
     force: false,
+    enrichAll: false,
+    enrichVersions: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === "--help" || arg === "-h") out.help = true;
     else if (arg === "backfill") out.command = "backfill";
+    else if (arg === "enrich") out.command = "enrich";
     else if (arg === "--sources") {
       i++;
       if (i < argv.length) out.sources = argv[i]!;
@@ -130,7 +152,15 @@ export function parseArgs(argv: ReadonlyArray<string>): Args {
       if (i < argv.length) out.state = argv[i]!;
     } else if (arg === "--source") {
       i++;
-      if (i < argv.length) out.backfillSource = argv[i]!;
+      if (i < argv.length) {
+        if (out.command === "enrich") out.enrichSource = argv[i]!;
+        else out.backfillSource = argv[i]!;
+      }
+    } else if (arg === "--all") {
+      out.enrichAll = true;
+    } else if (arg === "--version") {
+      i++;
+      if (i < argv.length) out.enrichVersions.push(argv[i]!);
     } else if (arg === "--max-age") {
       i++;
       if (i < argv.length) {
@@ -204,6 +234,73 @@ export async function main(argv: ReadonlyArray<string>): Promise<number> {
 
   const now = new Date().toISOString();
   try {
+    if (args.command === "enrich") {
+      if (args.enrichSource === undefined) {
+        process.stderr.write(`outpost enrich: --source is required\n\n${HELP}`);
+        return 2;
+      }
+      if (!args.enrichAll && args.enrichVersions.length === 0) {
+        process.stderr.write(
+          `outpost enrich: at least one of --all or --version is required\n\n${HELP}`,
+        );
+        return 2;
+      }
+      // Load the source spec directly (the orchestrator isn't
+      // designed for single-source explicit-version enrichment).
+      const specPath = join(args.sources, `${args.enrichSource.replace(/[^A-Za-z0-9._-]/g, "_")}.json`);
+      let raw: string;
+      try {
+        raw = await readFile(specPath, "utf8");
+      } catch (cause) {
+        process.stderr.write(
+          `outpost enrich: failed to read source spec at ${specPath}: ${(cause as Error).message}\n`,
+        );
+        return 2;
+      }
+      let spec;
+      try {
+        spec = await validateSourceSpec(JSON.parse(raw));
+      } catch (cause) {
+        process.stderr.write(
+          `outpost enrich: source spec validation failed: ${(cause as Error).message}\n`,
+        );
+        return 2;
+      }
+      if (!isStructured(spec)) {
+        process.stderr.write(
+          `outpost enrich: source ${args.enrichSource} is unstructured; version-join only applies to structured sources\n`,
+        );
+        return 2;
+      }
+      if (spec.enrichment === undefined) {
+        process.stderr.write(
+          `outpost enrich: source ${args.enrichSource} has no enrichment block in its spec\n`,
+        );
+        return 2;
+      }
+      // Build a state store + P2 receiver. The enrich run only
+      // touches the per-version enrichment state.
+      const state = new StateStore({ baseDir: args.state });
+      const p2 = new InMemoryP2Receiver();
+      await state.ensureDir();
+      const result = await runEnrichment({
+        source: spec,
+        now,
+        deps: { fetch: fetchImpl, readEnv: (n: string) => process.env[n], scrape: scrapeImpl },
+        state,
+        p2,
+      });
+      const report = {
+        mode: "enrich" as const,
+        source: args.enrichSource,
+        requestedVersions: args.enrichAll
+          ? null
+          : args.enrichVersions,
+        result,
+      };
+      process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+      return result.status === "failed" ? 1 : 0;
+    }
     const backfillOpts =
       args.command === "backfill"
         ? {

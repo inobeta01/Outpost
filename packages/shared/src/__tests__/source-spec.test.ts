@@ -312,3 +312,122 @@ describe("validation rejects bad inputs", () => {
     await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
   });
 });
+
+describe("enrichment (version-join)", () => {
+  const baseStructured = {
+    id: "pypi/requests",
+    kind: "structured" as const,
+    owner: "@a",
+    source_type: "pypi" as const,
+    fetch: { auth: "none" as const },
+    endpoints: {
+      package: { url: "https://pypi.org/pypi/requests/json", kind: "object" as const },
+    },
+    security: { allowed_domains: ["pypi.org"] },
+    firecrawl: false,
+  };
+
+  it("accepts a valid enrichment block with index_then_detail", async () => {
+    const good = {
+      ...baseStructured,
+      enrichment: {
+        strategy: "index_then_detail" as const,
+        endpoint_url: "https://example.com/changelog",
+        strategy_config: {
+          index_url: "https://example.com/changelog",
+          entry_link_pattern: "^/v[0-9-]+$",
+        },
+        anchor_source: "url_slug" as const,
+        anchor_pattern: "/v([0-9-]+)",
+      },
+    };
+    const spec = await validateSourceSpec(good);
+    assert.equal(spec.kind, "structured");
+    if (spec.kind === "structured") {
+      assert.ok(spec.enrichment, "enrichment block must be present");
+      assert.equal(spec.enrichment.strategy, "index_then_detail");
+      assert.equal(spec.enrichment.anchor_source, "url_slug");
+    }
+  });
+
+  it("accepts a valid enrichment block with rss", async () => {
+    const good = {
+      ...baseStructured,
+      enrichment: {
+        strategy: "rss" as const,
+        endpoint_url: "https://example.com/feed.xml",
+        strategy_config: { rss_url: "https://example.com/feed.xml" },
+        anchor_source: "inline_regex" as const,
+        anchor_pattern: "v([0-9.]+)",
+      },
+    };
+    const spec = await validateSourceSpec(good);
+    assert.equal(spec.kind, "structured");
+    if (spec.kind === "structured") {
+      assert.equal(spec.enrichment?.strategy, "rss");
+    }
+  });
+
+  it("rejects enrichment with single_page (no per-entry resolution)", async () => {
+    const bad = {
+      ...baseStructured,
+      enrichment: {
+        strategy: "single_page" as const,
+        endpoint_url: "https://example.com/changelog",
+        strategy_config: { index_url: "https://example.com/changelog" },
+        anchor_source: "url_slug" as const,
+        anchor_pattern: "v([0-9.]+)",
+      },
+    };
+    await assert.rejects(validateSourceSpec(bad), (err: unknown) => {
+      assert.ok(err instanceof SourceSpecValidationError);
+      const message = (err as Error).message;
+      assert.ok(
+        message.includes("single_page") && message.includes("not supported"),
+        `expected rejection message to mention single_page and "not supported", got: ${message}`,
+      );
+      return true;
+    });
+  });
+
+  it("rejects enrichment with raw_file (no per-entry resolution)", async () => {
+    const bad = {
+      ...baseStructured,
+      enrichment: {
+        strategy: "raw_file" as const,
+        endpoint_url: "https://example.com/CHANGES.md",
+        strategy_config: { file_url: "https://example.com/CHANGES.md" },
+        anchor_source: "url_slug" as const,
+        anchor_pattern: "v([0-9.]+)",
+      },
+    };
+    await assert.rejects(validateSourceSpec(bad), (err: unknown) => {
+      assert.ok(err instanceof SourceSpecValidationError);
+      const message = (err as Error).message;
+      assert.ok(
+        message.includes("raw_file") && message.includes("not supported"),
+        `expected rejection message to mention raw_file and "not supported", got: ${message}`,
+      );
+      return true;
+    });
+  });
+
+  it("rejects an enrichment block missing required fields", async () => {
+    const bad = {
+      ...baseStructured,
+      enrichment: {
+        strategy: "index_then_detail" as const,
+        // missing endpoint_url, anchor_source
+      },
+    };
+    await assert.rejects(validateSourceSpec(bad), SourceSpecValidationError);
+  });
+
+  it("accepts a structured source without an enrichment block (default)", async () => {
+    const spec = await validateSourceSpec(baseStructured);
+    assert.equal(spec.kind, "structured");
+    if (spec.kind === "structured") {
+      assert.equal(spec.enrichment, undefined);
+    }
+  });
+});
