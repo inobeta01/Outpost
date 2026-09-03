@@ -43,3 +43,14 @@ coverage/
 
 # OS
 Thumbs.db
+
+.gitattributes
+.graphifyignore
+graphify-out/
+
+.claude/
+
+CLAUDE.md
+opencode.json
+
+.outpost/

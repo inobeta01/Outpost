@@ -1,19 +1,19 @@
 {
-  "id": "github.com/stripe/stripe-node",
+  "id": "github.com/stripe/openapi",
   "kind": "structured",
   "owner": "@vendor-bot",
   "source_type": "openapi",
   "fetch": {
-    "auth": "github_token_env",
-    "rate_limit": "5000/h"
+    "auth": "none",
+    "rate_limit": "1000/h"
   },
   "endpoints": {
     "openapi": {
-      "url": "https://raw.githubusercontent.com/{owner}/{repo}/HEAD/openapi.yaml",
+      "url": "https://raw.githubusercontent.com/{owner}/{repo}/master/openapi/spec3.json",
       "kind": "spec",
       "variables": {
         "owner": "stripe",
-        "repo": "stripe-node"
+        "repo": "openapi"
       }
     }
   },
