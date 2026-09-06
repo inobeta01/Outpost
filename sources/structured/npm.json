@@ -1,0 +1,31 @@
+{
+  "id": "npm/openai",
+  "kind": "structured",
+  "owner": "@vendor-bot",
+  "source_type": "npm",
+  "fetch": {
+    "auth": "none",
+    "rate_limit": "1000/h"
+  },
+  "endpoints": {
+    "package": {
+      "url": "https://registry.npmjs.org/{package}",
+      "kind": "object",
+      "variables": {
+        "package": "openai"
+      }
+    },
+    "tarball": {
+      "url": "https://registry.npmjs.org/{package}/-/{tarball}",
+      "kind": "raw",
+      "variables": {
+        "package": "openai",
+        "tarball": "openai-4.0.0.tgz"
+      }
+    }
+  },
+  "security": {
+    "allowed_domains": ["registry.npmjs.org"]
+  },
+  "firecrawl": false
+}

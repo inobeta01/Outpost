@@ -1,0 +1,53 @@
+{
+  "info": {
+    "name": "requests",
+    "version": "1.0.4"
+  },
+  "releases": {
+    "1.0.0": [
+      {
+        "filename": "requests-1.0.0.tar.gz",
+        "packagetype": "sdist",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-1.0.0.tar.gz",
+        "upload_time": "2023-01-15T10:00:00.000Z",
+        "upload_time_iso_8601": "2023-01-15T10:00:00.000Z"
+      }
+    ],
+    "1.0.1": [
+      {
+        "filename": "requests-1.0.1.tar.gz",
+        "packagetype": "sdist",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-1.0.1.tar.gz",
+        "upload_time": "2023-04-15T10:00:00.000Z",
+        "upload_time_iso_8601": "2023-04-15T10:00:00.000Z"
+      }
+    ],
+    "1.0.2": [
+      {
+        "filename": "requests-1.0.2.tar.gz",
+        "packagetype": "sdist",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-1.0.2.tar.gz",
+        "upload_time": "2023-08-15T10:00:00.000Z",
+        "upload_time_iso_8601": "2023-08-15T10:00:00.000Z"
+      }
+    ],
+    "1.0.3": [
+      {
+        "filename": "requests-1.0.3.tar.gz",
+        "packagetype": "sdist",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-1.0.3.tar.gz",
+        "upload_time": "2024-02-15T10:00:00.000Z",
+        "upload_time_iso_8601": "2024-02-15T10:00:00.000Z"
+      }
+    ],
+    "1.0.4": [
+      {
+        "filename": "requests-1.0.4.tar.gz",
+        "packagetype": "sdist",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-1.0.4.tar.gz",
+        "upload_time": "2025-06-15T10:00:00.000Z",
+        "upload_time_iso_8601": "2025-06-15T10:00:00.000Z"
+      }
+    ]
+  }
+}

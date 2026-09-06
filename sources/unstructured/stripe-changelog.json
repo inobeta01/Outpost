@@ -1,0 +1,26 @@
+{
+  "id": "stripe.com/changelog",
+  "kind": "unstructured",
+  "owner": "@vendor-bot",
+  "extraction_strategy": "index_then_detail",
+  "strategy_config": {
+    "index_url": "https://stripe.com/changelog",
+    "entry_link_pattern": "^/changelog/[a-z]+/[0-9]{4}-[0-9]{2}-[0-9]{2}/"
+  },
+  "fetch": {
+    "auth": "none",
+    "url": "https://stripe.com/changelog",
+    "type": "firecrawl",
+    "fetch_method": "scrape",
+    "rate_limit": "60/m"
+  },
+  "security": {
+    "allowed_domains": ["stripe.com"]
+  },
+  "anchor_source": "url_slug",
+  "anchor_pattern": "/changelog/([a-z]+)/([0-9]{4}-[0-9]{2}-[0-9]{2})/",
+  "staleness_sentinel": {
+    "max_inactivity_days": 90
+  },
+  "firecrawl": true
+}

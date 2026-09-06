@@ -1,0 +1,28 @@
+{
+  "name": "@outpost/processing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "P2 — content hash filter, symbolic diff, confidence scoring, HMAC signing of ChangeEvents. Trust boundary's other half.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'lint not configured yet' && exit 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@outpost/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "pypi/requests",
+  "kind": "structured",
+  "owner": "@vendor-bot",
+  "source_type": "pypi",
+  "fetch": {
+    "auth": "none",
+    "rate_limit": "1000/h"
+  },
+  "endpoints": {
+    "package": {
+      "url": "https://pypi.org/pypi/{package}/json",
+      "kind": "object",
+      "variables": {
+        "package": "requests"
+      }
+    }
+  },
+  "security": {
+    "allowed_domains": ["pypi.org", "files.pythonhosted.org"]
+  },
+  "firecrawl": false
+}

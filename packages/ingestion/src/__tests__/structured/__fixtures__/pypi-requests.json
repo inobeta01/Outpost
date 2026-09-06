@@ -1,0 +1,35 @@
+{
+  "info": {
+    "name": "requests",
+    "version": "2.32.3",
+    "summary": "Python HTTP for Humans.",
+    "author": "Kenneth Reitz",
+    "license": "Apache-2.0",
+    "requires_python": ">=3.8"
+  },
+  "last_serial": 12345,
+  "releases": {
+    "2.32.3": [
+      {
+        "filename": "requests-2.32.3-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+        "url": "https://files.pythonhosted.org/packages/abc/requests-2.32.3-py3-none-any.whl",
+        "digests": {
+          "sha256": "abc123"
+        }
+      }
+    ]
+  },
+  "urls": [
+    {
+      "filename": "requests-2.32.3-py3-none-any.whl",
+      "packagetype": "bdist_wheel",
+      "url": "https://files.pythonhosted.org/packages/abc/requests-2.32.3-py3-none-any.whl"
+    },
+    {
+      "filename": "requests-2.32.3.tar.gz",
+      "packagetype": "sdist",
+      "url": "https://files.pythonhosted.org/packages/abc/requests-2.32.3.tar.gz"
+    }
+  ]
+}

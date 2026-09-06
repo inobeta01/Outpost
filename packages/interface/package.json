@@ -1,0 +1,30 @@
+{
+  "name": "@outpost/interface",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Agent interface layer — MCP server (get_entry, list_changes, verify_entry) plus webhook dispatcher. Signed responses.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'lint not configured yet' && exit 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@outpost/shared": "workspace:*",
+    "@outpost/registry-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "typescript": "^5.7.0"
+  }
+}

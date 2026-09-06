@@ -1,0 +1,35 @@
+{
+  "_id": "openai",
+  "_rev": "1234-abc",
+  "name": "openai",
+  "dist-tags": {
+    "latest": "4.56.0",
+    "beta": "5.0.0-beta.1"
+  },
+  "versions": {
+    "4.56.0": {
+      "name": "openai",
+      "version": "4.56.0",
+      "description": "The official Node.js / Typescript library for the OpenAI API",
+      "dist": {
+        "shasum": "abc123def456",
+        "tarball": "https://registry.npmjs.org/openai/-/openai-4.56.0.tgz"
+      }
+    },
+    "4.55.0": {
+      "name": "openai",
+      "version": "4.55.0",
+      "dist": {
+        "shasum": "oldshasum",
+        "tarball": "https://registry.npmjs.org/openai/-/openai-4.55.0.tgz"
+      }
+    }
+  },
+  "time": {
+    "4.56.0": "2026-07-15T10:00:00.000Z",
+    "4.55.0": "2026-06-01T10:00:00.000Z"
+  },
+  "maintainers": [
+    {"name": "openai", "email": "support@openai.com"}
+  ]
+}

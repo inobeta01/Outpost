@@ -1,0 +1,9 @@
+{
+  "name": "openai",
+  "version": "4.56.0",
+  "description": "The official Node.js / Typescript library for the OpenAI API",
+  "dist": {
+    "shasum": "abc123def456",
+    "tarball": "https://registry.npmjs.org/openai/-/openai-4.56.0.tgz"
+  }
+}
