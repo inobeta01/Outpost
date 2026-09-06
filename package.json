@@ -1,0 +1,33 @@
+{
+  "name": "outpost",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inobeta01/Outpost.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/inobeta01/Outpost/issues"
+  },
+  "homepage": "https://github.com/inobeta01/Outpost#readme",
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "prisma": "^7.10.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^17.4.2"
+  }
+}

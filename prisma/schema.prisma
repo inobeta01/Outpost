@@ -1,0 +1,157 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+model Vendor {
+  id                String    @id @default(uuid())
+  slug              String    @unique
+  name              String
+  source_type       String
+  trust_tier        String
+  config            Json?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  packages          Package[]
+  changeEvents      ChangeEvent[]
+  allowlistEntries  VendorAllowlist[]
+  webhookSubs       WebhookEndpointSubscription[]
+
+  @@index([slug], map: "vendor_slug_idx")
+}
+
+model Package {
+  id               String   @id @default(uuid())
+  vendor           Vendor   @relation(fields: [vendor_id], references: [id])
+  vendor_id        String
+  canonical_name   String   // e.g. "@anthropic-ai/sdk"
+  display_name     String?
+  metadata         Json?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  changeEvents     ChangeEvent[]
+  webhookSubs      WebhookEndpointSubscription[]
+
+  @@index([canonical_name], map: "package_canonical_name_idx")
+}
+
+model SigningKey {
+  key_id      String   @id
+  public_key  Bytes
+  algorithm   String   // "hmac-sha256 for v1"
+  status      String   // "active" | "rotated" | "revoked"
+  created_at  DateTime @default(now())
+  rotated_at  DateTime?
+  revoked_at  DateTime?
+
+  // Relations
+  signedEvents ChangeEvent[]
+
+  @@index([key_id], map: "signing_key_idx")
+}
+
+model ChangeEvent {
+  id                String   @id @default(uuid())
+  vendor            Vendor   @relation(fields: [vendor_id], references: [id])
+  vendor_id         String
+  package           Package  @relation(fields: [package_id], references: [id])
+  package_id        String
+  previous_event    ChangeEvent? @relation("EventChain", fields: [previous_event_id], references: [id])
+  previous_event_id String?
+  version           String
+  content_hash       Bytes    // sha256 of canonical payload
+  payload           Json?
+  signature         Bytes    // HMAC over canonical form
+  signer_key        SigningKey @relation(fields: [signer_key_id], references: [key_id])
+  signer_key_id     String
+  trust_tier        String
+  created_at        DateTime @default(now())
+
+  // Self‑referencing chain
+  next_events       ChangeEvent[] @relation("EventChain")
+
+  // Relations
+  auditLogs         AuditLog[]
+}
+
+model AgentIdentity {
+  id         String   @id @default(uuid())
+  public_key Bytes
+  name       String?
+  status     String   // "active" | "revoked"
+  created_at DateTime @default(now())
+  revoked_at DateTime?
+
+  // Relations
+  auditLogs        AuditLog[]
+  ownedEndpoints   WebhookEndpoint[]
+}
+
+model AuditLog {
+  id               BigInt   @id @default(autoincrement())
+  agent            AgentIdentity @relation(fields: [agent_id], references: [id])
+  agent_id         String
+  action           String   // "fetch_entry|list_changes|verify_entry|sign_event"
+  target_event     ChangeEvent? @relation(fields: [target_event_id], references: [id])
+  target_event_id  String?
+  ip_address       String   @db.Inet
+  created_at       DateTime @default(now())
+}
+
+model VendorAllowlist {
+  id          String   @id @default(uuid())
+  vendor       Vendor   @relation(fields: [vendor_id], references: [id])
+  vendor_id    String
+  source_url   String
+  approved_by  String   // maintainer handle
+  approved_at  DateTime @default(now())
+}
+
+model WebhookEndpoint {
+  id            String   @id @default(uuid())
+  owner_agent   AgentIdentity @relation(fields: [owner_agent_id], references: [id])
+  owner_agent_id String
+  url           String
+  secret_hash    Bytes
+  status        String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  nonces        WebhookNonce[]
+  subscriptions WebhookEndpointSubscription[]
+}
+
+model WebhookEndpointSubscription {
+  id          String   @id @default(uuid())
+  endpoint    WebhookEndpoint @relation(fields: [endpoint_id], references: [id])
+  endpoint_id String
+  vendor      Vendor   @relation(fields: [vendor_id], references: [id])
+  vendor_id   String
+  package     Package? @relation(fields: [package_id], references: [id])
+  package_id  String?
+
+  @@unique([endpoint_id, vendor_id, package_id])
+}
+
+model WebhookNonce {
+  nonce        String   @id
+  endpoint     WebhookEndpoint @relation(fields: [endpoint_id], references: [id])
+  endpoint_id  String
+  received_at  DateTime @default(now())
+  expires_at   DateTime
+}
+
+model SchemaMigration {
+  version   String   @id
+  applied_at DateTime @default(now())
+}
+
+
+
