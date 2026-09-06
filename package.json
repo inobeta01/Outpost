@@ -1,6 +1,7 @@
 {
   "name": "outpost",
-  "version": "0.0.0",
+  "type": "module",
+  "version": "1.0.0",
   "private": true,
   "description": "Trust-rooted registry of external API/SDK/vendor changes, with signed change events for downstream agents.",
   "license": "Apache-2.0",
@@ -16,8 +17,31 @@
     "lint": "pnpm -r --filter='./packages/*' lint",
     "clean": "pnpm -r --filter='./packages/*' clean && rm -rf node_modules"
   },
+ 
+  
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inobeta01/Outpost.git"
+  },
+  "author": "",
+  
+  "bugs": {
+    "url": "https://github.com/inobeta01/Outpost/issues"
+  },
+  "homepage": "https://github.com/inobeta01/Outpost#readme",
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^26.4.1",
+    "prisma": "^7.10.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^17.4.2"
   }
 }
